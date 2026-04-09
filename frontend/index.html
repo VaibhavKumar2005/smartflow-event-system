@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartFlow Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+
+  <div class="dashboard-container">
+    <header class="header">
+      <div class="logo">
+        <i class="fa-solid fa-satellite-dish"></i>
+        <h1>SmartFlow AI</h1>
+      </div>
+      <div class="status-badge">
+        <span class="pulse"></span> System Active
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- Controls Panel -->
+      <section class="controls-panel card">
+        <h2><i class="fa-solid fa-location-crosshairs"></i> Navigation</h2>
+        <p class="subtitle">Select your destination for AI routing</p>
+        
+        <div class="input-group">
+          <label for="destination">Destination</label>
+          <div class="select-wrapper">
+            <i class="fa-solid fa-store icon"></i>
+            <select id="destination">
+              <option value="food">Food Stall Zone A</option>
+              <option value="exit">North Exit Gate</option>
+              <option value="washroom">Main Washroom</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="btn-primary" onclick="suggestRoute()">
+          <i class="fa-solid fa-route"></i> Suggest Route
+        </button>
+      </section>
+
+      <!-- Map Section -->
+      <section class="map-section card">
+        <div class="map-header">
+          <h2>Stadium Heatmap</h2>
+          <div class="legend">
+            <div class="legend-item"><span class="color-box low"></span> Low</div>
+            <div class="legend-item"><span class="color-box medium"></span> Moderate</div>
+            <div class="legend-item"><span class="color-box high"></span> High</div>
+          </div>
+        </div>
+        
+        <div class="map-wrapper">
+          <div id="map"></div>
+        </div>
+      </section>
+
+      <!-- AI Suggestion Panel -->
+      <section class="ai-panel card">
+        <div class="ai-header">
+          <i class="fa-solid fa-robot"></i>
+          <h2>Gemini Routing Intelligence</h2>
+        </div>
+        <div class="ai-content">
+          <div id="ai-loading" class="hidden">
+            <div class="spinner"></div>
+            <span>Analyzing crowd density points...</span>
+          </div>
+          <div id="ai-output">
+            Select a destination to let AI calculate the optimal, crowd-free path.
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
