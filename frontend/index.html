@@ -1,90 +1,244 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="SmartFlow AI — real-time stadium crowd routing and navigation dashboard.">
-  <title>SmartFlow AI — Crowd Navigation</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-</head>
-<body>
+  <meta name="description" content="SmartFlow — AI-powered real-time stadium crowd routing and intelligence dashboard.">
+  <title>SmartFlow — Crowd Intelligence</title>
 
-  <div class="dashboard-container">
-    <header class="header">
-      <div class="logo">
-        <i class="fa-solid fa-satellite-dish"></i>
-        <h1>SmartFlow AI</h1>
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            surface:  { DEFAULT: '#0a0e1a', 50: '#111827', 100: '#131a2e', 200: '#1a2340' },
+            glass:    'rgba(255,255,255,0.04)',
+            border:   'rgba(255,255,255,0.07)',
+            low:      { DEFAULT: '#10b981', light: '#34d399' },
+            med:      { DEFAULT: '#f59e0b', light: '#fbbf24' },
+            high:     { DEFAULT: '#ef4444', light: '#f87171' },
+            accent:   { cyan: '#06b6d4', purple: '#8b5cf6', blue: '#3b82f6', pink: '#ec4899' },
+          },
+          borderRadius: { '2xl': '1rem', '3xl': '1.25rem', '4xl': '1.5rem' },
+        }
+      }
+    };
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+
+  <!-- Custom styles (animations, heatmap cells, glassmorphism helpers) -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="bg-surface text-white font-sans min-h-screen antialiased">
+
+  <!-- ═══════════════════ Background Ambient Glow ═══════════════════ -->
+  <div class="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+    <div class="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-accent-blue/10 blur-[160px]"></div>
+    <div class="absolute -bottom-40 -right-40 w-[500px] h-[500px] rounded-full bg-accent-purple/10 blur-[140px]"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-accent-cyan/5 blur-[120px]"></div>
+  </div>
+
+  <div class="relative z-10 max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
+
+    <!-- ═══════════════════ HEADER ═══════════════════ -->
+    <header class="glass-card flex items-center justify-between px-6 py-4 rounded-3xl">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-cyan to-accent-blue flex items-center justify-center shadow-lg shadow-accent-blue/20">
+          <i data-lucide="radio-tower" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-white to-slate-400 bg-clip-text text-transparent">SmartFlow</h1>
+          <p class="text-[11px] text-slate-500 font-medium tracking-widest uppercase">Crowd Intelligence</p>
+        </div>
       </div>
-      <div class="header-right">
-        <button id="refresh-btn" class="btn-ghost" onclick="loadStadiumState()" title="Refresh crowd data">
-          <i class="fa-solid fa-rotate"></i>
+      <div class="flex items-center gap-3">
+        <button id="refresh-btn" onclick="loadStadiumState()" title="Refresh data"
+          class="w-9 h-9 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all duration-200 hover:scale-105 active:scale-95">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
         </button>
-        <div class="status-badge">
-          <span class="pulse"></span> System Active
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-low/10 border border-low/20 text-low text-sm font-semibold">
+          <span class="pulse-dot"></span>
+          <span class="hidden sm:inline">System Active</span>
+          <span class="sm:hidden">Live</span>
         </div>
       </div>
     </header>
 
-    <main class="content">
+    <!-- ═══════════════════ KPI METRICS ═══════════════════ -->
+    <section id="kpi-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <!-- Crowd Density -->
+      <div class="kpi-card group" data-kpi="density">
+        <div class="kpi-icon bg-gradient-to-br from-accent-cyan/20 to-accent-cyan/5 text-accent-cyan">
+          <i data-lucide="users" class="w-5 h-5"></i>
+        </div>
+        <p class="text-[11px] text-slate-500 font-medium uppercase tracking-wider mt-3">Crowd Density</p>
+        <p class="text-2xl font-bold mt-1" id="kpi-density">—</p>
+        <p class="text-[11px] text-slate-500 mt-1" id="kpi-density-sub">Loading…</p>
+      </div>
 
-      <!-- Controls Panel -->
-      <section class="controls-panel card">
-        <h2><i class="fa-solid fa-location-crosshairs"></i> Navigation</h2>
-        <p class="subtitle">Select your destination for AI-optimized routing</p>
+      <!-- Avg Wait Time -->
+      <div class="kpi-card group" data-kpi="wait">
+        <div class="kpi-icon bg-gradient-to-br from-accent-purple/20 to-accent-purple/5 text-accent-purple">
+          <i data-lucide="clock" class="w-5 h-5"></i>
+        </div>
+        <p class="text-[11px] text-slate-500 font-medium uppercase tracking-wider mt-3">Avg Wait</p>
+        <p class="text-2xl font-bold mt-1" id="kpi-wait">—</p>
+        <p class="text-[11px] text-slate-500 mt-1">Estimated</p>
+      </div>
 
-        <div class="input-group">
-          <label for="destination">Destination</label>
-          <div class="select-wrapper">
-            <i class="fa-solid fa-store icon"></i>
-            <!-- Options populated dynamically from GET /api/stadium-state -->
-            <select id="destination">
+      <!-- Safe Zones -->
+      <div class="kpi-card group" data-kpi="safe">
+        <div class="kpi-icon bg-gradient-to-br from-low/20 to-low/5 text-low">
+          <i data-lucide="shield-check" class="w-5 h-5"></i>
+        </div>
+        <p class="text-[11px] text-slate-500 font-medium uppercase tracking-wider mt-3">Safe Zones</p>
+        <p class="text-2xl font-bold mt-1" id="kpi-safe">—</p>
+        <p class="text-[11px] text-slate-500 mt-1" id="kpi-safe-sub">of 25 total</p>
+      </div>
+
+      <!-- Route Efficiency -->
+      <div class="kpi-card group" data-kpi="efficiency">
+        <div class="kpi-icon bg-gradient-to-br from-accent-blue/20 to-accent-blue/5 text-accent-blue">
+          <i data-lucide="zap" class="w-5 h-5"></i>
+        </div>
+        <p class="text-[11px] text-slate-500 font-medium uppercase tracking-wider mt-3">Efficiency</p>
+        <p class="text-2xl font-bold mt-1" id="kpi-efficiency">—</p>
+        <p class="text-[11px] text-slate-500 mt-1">Route score</p>
+      </div>
+
+      <!-- Active Alerts -->
+      <div class="kpi-card group col-span-2 sm:col-span-1" data-kpi="alerts">
+        <div class="kpi-icon bg-gradient-to-br from-high/20 to-high/5 text-high">
+          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+        </div>
+        <p class="text-[11px] text-slate-500 font-medium uppercase tracking-wider mt-3">Active Alerts</p>
+        <p class="text-2xl font-bold mt-1" id="kpi-alerts">—</p>
+        <p class="text-[11px] text-slate-500 mt-1">High-density zones</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ MAIN GRID ═══════════════════ -->
+    <main class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+      <!-- ──── LEFT: Navigation + Route Panel ──── -->
+      <div class="lg:col-span-3 flex flex-col gap-5">
+
+        <!-- Navigation Controls -->
+        <div class="glass-card p-5 rounded-3xl">
+          <div class="flex items-center gap-2 mb-1">
+            <i data-lucide="compass" class="w-5 h-5 text-accent-cyan"></i>
+            <h2 class="font-semibold text-base">Navigation</h2>
+          </div>
+          <p class="text-xs text-slate-500 mb-5">Select destination for AI-optimized routing</p>
+
+          <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Destination</label>
+          <div class="relative mb-4">
+            <i data-lucide="map-pin" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none"></i>
+            <select id="destination"
+              class="w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm font-medium appearance-none cursor-pointer outline-none transition-all focus:border-accent-cyan/50 focus:ring-2 focus:ring-accent-cyan/20 hover:bg-white/[0.07]">
               <option disabled>Loading destinations…</option>
             </select>
+            <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none"></i>
+          </div>
+
+          <button id="suggest-btn" onclick="suggestRoute()"
+            class="w-full relative overflow-hidden flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-accent-blue to-accent-purple text-white text-sm font-semibold shadow-lg shadow-accent-blue/25 transition-all duration-300 hover:shadow-xl hover:shadow-accent-blue/40 hover:-translate-y-0.5 active:translate-y-0 active:shadow-md disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none group">
+            <i data-lucide="route" class="w-4 h-4 transition-transform group-hover:rotate-12"></i>
+            <span>Suggest Route</span>
+            <div class="shimmer"></div>
+          </button>
+        </div>
+
+        <!-- Route Suggestion Panel -->
+        <div class="glass-card p-5 rounded-3xl flex-1">
+          <div class="flex items-center gap-2 mb-4">
+            <i data-lucide="sparkles" class="w-5 h-5 text-accent-purple animate-float"></i>
+            <h2 class="font-semibold text-base">Gemini Intelligence</h2>
+          </div>
+
+          <div class="rounded-2xl bg-white/[0.02] border border-white/5 p-4 min-h-[120px] relative overflow-hidden">
+            <div class="ai-accent-bar"></div>
+            <div id="ai-loading" class="hidden items-center gap-3 py-4">
+              <div class="spinner"></div>
+              <span class="text-sm text-slate-400">Analyzing crowd patterns…</span>
+            </div>
+            <div id="ai-output" class="text-sm text-slate-400 leading-relaxed">
+              Select a destination to let AI calculate the optimal, crowd-free path.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ──── CENTER: Heatmap ──── -->
+      <div class="lg:col-span-5">
+        <div class="glass-card p-5 rounded-3xl h-full flex flex-col">
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div class="flex items-center gap-2">
+              <i data-lucide="map" class="w-5 h-5 text-accent-blue"></i>
+              <h2 class="font-semibold text-base">Stadium Heatmap</h2>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-1.5 rounded-full bg-white/5 border border-white/5 text-[11px] font-medium">
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-low shadow-sm shadow-low/50"></span><span class="text-slate-400">Low</span></span>
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-med shadow-sm shadow-med/50"></span><span class="text-slate-400">Moderate</span></span>
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-high shadow-sm shadow-high/50"></span><span class="text-slate-400">High</span></span>
+            </div>
+          </div>
+
+          <div class="flex-1 flex items-center justify-center rounded-2xl bg-white/[0.02] border border-white/5 p-5 map-glow">
+            <div id="map" class="heatmap-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ──── RIGHT: Alerts + Chart ──── -->
+      <div class="lg:col-span-4 flex flex-col gap-5">
+
+        <!-- Live Alerts -->
+        <div class="glass-card p-5 rounded-3xl">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="bell-ring" class="w-5 h-5 text-med"></i>
+              <h2 class="font-semibold text-base">Live Alerts</h2>
+            </div>
+            <span id="alert-count-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-high/15 text-high border border-high/20 hidden">0</span>
+          </div>
+          <div id="alerts-list" class="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+            <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/[0.02] border border-white/5 text-sm text-slate-500">
+              <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
+              <span>Waiting for data…</span>
+            </div>
           </div>
         </div>
 
-        <button id="suggest-btn" class="btn-primary" onclick="suggestRoute()">
-          <i class="fa-solid fa-route"></i> Suggest Route
-        </button>
-      </section>
-
-      <!-- Heatmap Section -->
-      <section class="map-section card">
-        <div class="map-header">
-          <h2>Stadium Heatmap</h2>
-          <div class="legend">
-            <div class="legend-item"><span class="color-box low"></span> Low</div>
-            <div class="legend-item"><span class="color-box medium"></span> Moderate</div>
-            <div class="legend-item"><span class="color-box high"></span> High</div>
+        <!-- Crowd Trend Chart -->
+        <div class="glass-card p-5 rounded-3xl flex-1">
+          <div class="flex items-center gap-2 mb-4">
+            <i data-lucide="trending-up" class="w-5 h-5 text-accent-cyan"></i>
+            <h2 class="font-semibold text-base">Crowd Trend</h2>
+          </div>
+          <div class="relative h-[180px]">
+            <canvas id="crowd-chart"></canvas>
           </div>
         </div>
-
-        <div class="map-wrapper">
-          <!-- Rendered by app.js via renderMap() -->
-          <div id="map"></div>
-        </div>
-      </section>
-
-      <!-- AI Suggestion Panel -->
-      <section class="ai-panel card">
-        <div class="ai-header">
-          <i class="fa-solid fa-robot"></i>
-          <h2>Gemini Routing Intelligence</h2>
-        </div>
-        <div class="ai-content">
-          <div id="ai-loading" class="hidden">
-            <div class="spinner"></div>
-            <span>Analyzing crowd density points…</span>
-          </div>
-          <div id="ai-output">
-            Select a destination to let AI calculate the optimal, crowd-free path.
-          </div>
-        </div>
-      </section>
-
+      </div>
     </main>
+
+    <!-- ═══════════════════ FOOTER ═══════════════════ -->
+    <footer class="text-center text-xs text-slate-600 py-3">
+      SmartFlow Crowd Intelligence &middot; Powered by Gemini AI &middot; Built for real-time operations
+    </footer>
   </div>
 
   <script src="app.js"></script>
