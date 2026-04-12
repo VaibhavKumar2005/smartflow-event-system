@@ -10,6 +10,7 @@
   --low: #10b981;
   --medium: #f59e0b;
   --high: #ef4444;
+  --error: #f87171;
 }
 
 * {
@@ -50,6 +51,12 @@ body {
   border-radius: 16px;
   backdrop-filter: blur(12px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .logo {
@@ -235,6 +242,43 @@ select:focus {
   transform: translateY(0);
 }
 
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-primary:disabled::after {
+  display: none;
+}
+
+/* Ghost icon button (refresh) */
+.btn-ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-main);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* Map Section */
 .map-header {
   display: flex;
@@ -345,6 +389,23 @@ select:focus {
   box-shadow: 0 0 20px rgba(255,255,255,0.7), inset 0 0 15px rgba(255,255,255,0.5);
 }
 
+/* Active route path highlight */
+.zone.on-path {
+  box-shadow: inset 0 0 0 3px rgba(139, 92, 246, 0.9), 0 0 16px rgba(139, 92, 246, 0.4);
+  z-index: 5;
+}
+
+.path-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  font-size: 1.2rem;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+  pointer-events: none;
+}
+
 /* AI Panel */
 .ai-panel {
   display: flex;
@@ -439,4 +500,71 @@ select:focus {
 .highlight {
   color: var(--accent);
   font-weight: 600;
+}
+
+/* ── AI Result UI ─────────────────────────────────────────── */
+
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.risk-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.25rem 0.6rem;
+  border-radius: 20px;
+}
+
+.result-recommendation {
+  color: var(--text-main);
+  line-height: 1.65;
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.result-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.result-avoid {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.avoid-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.avoid-tag {
+  font-size: 0.75rem;
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--high);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+}
+
+/* ── Error state ──────────────────────────────────────────── */
+
+.error-state {
+  color: var(--error);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  width: 100%;
 }

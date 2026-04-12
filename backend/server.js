@@ -1,59 +1,86 @@
-import express from 'express';
-import cors from 'cors';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import dotenv from 'dotenv';
+/**
+ * backend/server.js
+ * ─────────────────────────────────────────────────────────────
+ * Entry point. Responsible ONLY for:
+ *   1. Loading environment config
+ *   2. Wiring security + logging middleware
+ *   3. Mounting route modules
+ *   4. Starting the HTTP server
+ *
+ * Business logic lives in routes/, services/, and validators/.
+ */
 
-// Load environment variables from .env file
+import express  from 'express';
+import cors     from 'cors';
+import helmet   from 'helmet';
+import rateLimit from 'express-rate-limit';
+import morgan   from 'morgan';
+import dotenv   from 'dotenv';
+
+import stadiumRouter     from './routes/stadium.js';
+import routeRouter       from './routes/route.js';
+import { errorHandler }  from './middleware/errorHandler.js';
+
 dotenv.config();
 
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// ── Security headers ─────────────────────────────────────────
+// helmet sets X-Frame-Options, X-Content-Type-Options, etc.
+app.use(helmet());
 
-// Initialize Gemini SDK
-// Make sure to add your GEMINI_API_KEY to a .env file!
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+// ── CORS ─────────────────────────────────────────────────────
+// Lock to ALLOWED_ORIGIN in production; open in dev.
+app.use(cors({
+  origin:         process.env.ALLOWED_ORIGIN || '*',
+  methods:        ['GET', 'POST'],
+  allowedHeaders: ['Content-Type'],
+}));
 
-app.post('/api/suggest-route', async (req, res) => {
-  try {
-    const { userLocation, destination, crowdData } = req.body;
+// ── Rate limiting ─────────────────────────────────────────────
+// Applied to /api/* only. Protects Gemini quota and prevents abuse.
+const limiter = rateLimit({
+  windowMs: 60 * 1_000,                                      // 1 minute window
+  max:      parseInt(process.env.RATE_LIMIT_MAX ?? '30', 10), // requests per window
+  standardHeaders: true,
+  legacyHeaders:   false,
+  handler: (_req, res) => {
+    res.status(429).json({
+      error:   'RATE_LIMITED',
+      message: 'Too many requests — please wait a moment before trying again.',
+    });
+  },
+});
+app.use('/api/', limiter);
 
-    if (!userLocation || !destination || !crowdData) {
-      return res.status(400).json({ error: "Missing required fields." });
-    }
+// ── Request logging ───────────────────────────────────────────
+// 'combined' in production (Apache format, great for log aggregators),
+// 'dev' locally (colorized, compact).
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-    // Construct the prompt for Gemini
-    const prompt = `
-      You are an AI assistant for a stadium crowd management system.
-      Current Status:
-      - Initial User Position: Grid Index ${userLocation}
-      - Intended Destination: ${destination}
-      - Stadium Heatmap Grid Data (0-24, left-to-right, top-to-bottom):
-        ${JSON.stringify(crowdData)}
+// ── Body parsing ──────────────────────────────────────────────
+// Hard 10 KB cap prevents oversized JSON payloads.
+app.use(express.json({ limit: '10kb' }));
 
-      Task: Generate a short, smart recommendation (max 2 sentences).
-      1. Suggest an optimal route that avoids high/crowded zones.
-      2. Mention the approximate time saved.
-      3. Keep it sound intelligent, helpful, and concise.
-      
-      Return ONLY the response text.
-    `;
+// ── Routes ────────────────────────────────────────────────────
+app.use('/api', stadiumRouter);
+app.use('/api', routeRouter);
 
-    // Call the Gemini API
-    const result = await model.generateContent(prompt);
-    const recommendation = result.response.text().trim();
-
-    return res.json({ recommendation });
-  } catch (error) {
-    console.error("Gemini API Error:", error.message);
-    return res.status(500).json({ error: "Failed to generate route suggestion." });
-  }
+// ── 404 ───────────────────────────────────────────────────────
+app.use((req, res) => {
+  res.status(404).json({
+    error:   'NOT_FOUND',
+    message: `${req.method} ${req.path} is not a valid endpoint.`,
+  });
 });
 
-const PORT = process.env.PORT || 3000;
+// ── Centralized error handler ─────────────────────────────────
+// Must be the last middleware — Express identifies it by arity (4 args).
+app.use(errorHandler);
+
+// ── Start ─────────────────────────────────────────────────────
+const PORT = parseInt(process.env.PORT ?? '3000', 10);
 app.listen(PORT, () => {
-  console.log(`🚀 SmartFlow AI Backend running on http://localhost:${PORT}`);
+  const env = process.env.NODE_ENV ?? 'development';
+  console.log(`🚀 SmartFlow backend running on http://localhost:${PORT} [${env}]`);
 });

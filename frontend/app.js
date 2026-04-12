@@ -1,184 +1,245 @@
-const map = document.getElementById("map");
+/**
+ * frontend/app.js
+ * ─────────────────────────────────────────────────────────────
+ * SmartFlow dashboard — fully driven by the backend API.
+ *
+ * Nothing is hardcoded here:
+ *   - Zone data, destination list, and user position all come from
+ *     GET /api/stadium-state on page load.
+ *   - Path computation happens on the backend (Dijkstra in services/pathfinder.js).
+ *   - AI explanation comes from Gemini via the backend (structured JSON).
+ *
+ * To point this at a different backend (staging, production), change
+ * CONFIG.API_BASE — that's the only line that needs to change.
+ */
 
-// 5x5 Grid representation
-const zones = [
-  "low", "medium", "high", "low", "medium",
-  "low", "high", "high", "medium", "low",
-  "low", "medium", "low", "high", "medium",
-  "medium", "low", "high", "low", "low",
-  "high", "medium", "low", "medium", "low"
-];
-
-// Destination indices mapping based on grid 5x5
-const destinations = {
-  food: 4,       // Top right
-  exit: 2,       // Top middle
-  washroom: 20   // Bottom left
+// ── Config ────────────────────────────────────────────────────
+const CONFIG = {
+  API_BASE: 'http://localhost:3000/api',
 };
 
-const userPos = 12; // Center
+// ── App state ─────────────────────────────────────────────────
+const state = {
+  zones:       [],   // string[] — 'low' | 'medium' | 'high', 25 entries
+  destinations: [],  // { key, label, gridIndex }[]
+  userPos:     12,   // flat grid index
+  gridSize:    5,
+  activePath:  [],   // flat grid indices currently highlighted
+  isLoading:   false,
+};
 
-function renderMap() {
-  map.innerHTML = "";
+// ── DOM refs ──────────────────────────────────────────────────
+const mapEl           = document.getElementById('map');
+const destinationSelect = document.getElementById('destination');
+const aiOutput        = document.getElementById('ai-output');
+const aiLoading       = document.getElementById('ai-loading');
+const suggestBtn      = document.getElementById('suggest-btn');
+const refreshBtn      = document.getElementById('refresh-btn');
 
-  zones.forEach((z, i) => {
-    const div = document.createElement("div");
-    div.classList.add("zone", z);
+// ── Initialise ────────────────────────────────────────────────
+async function init() {
+  await loadStadiumState();
+}
 
-    // Current user position
-    if (i === userPos) { 
-      div.classList.add("user");
-    }
+async function loadStadiumState() {
+  setLoadingState(true);
+  clearOutput();
 
-    // Add a slight animation delay for a cascading load effect
-    div.style.animation = `fadeIn 0.5s ease forwards ${i * 0.03}s`;
-    div.style.opacity = '0';
+  try {
+    const res = await fetch(`${CONFIG.API_BASE}/stadium-state`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    map.appendChild(div);
+    const data = await res.json();
+    state.zones        = data.zones;
+    state.destinations = data.destinations;
+    state.userPos      = data.userPos;
+    state.gridSize     = data.gridSize;
+    state.activePath   = [];
+
+    populateDestinations();
+    renderMap();
+  } catch (err) {
+    console.error('[SmartFlow] init failed:', err);
+    showError(
+      'Cannot connect to SmartFlow backend. ' +
+      'Make sure the server is running on port 3000.'
+    );
+  } finally {
+    setLoadingState(false);
+  }
+}
+
+// ── Destinations select ───────────────────────────────────────
+function populateDestinations() {
+  destinationSelect.innerHTML = '';
+  state.destinations.forEach(dest => {
+    const option       = document.createElement('option');
+    option.value       = dest.key;
+    option.textContent = dest.label;
+    destinationSelect.appendChild(option);
   });
 }
 
-// Add keyframes for the initial load animation safely via JS
-const styleSheet = document.createElement("style");
-styleSheet.innerText = `
+// ── Heatmap rendering ─────────────────────────────────────────
+function renderMap() {
+  mapEl.innerHTML = '';
+
+  state.zones.forEach((density, i) => {
+    const cell       = document.createElement('div');
+    cell.classList.add('zone', density);
+    cell.dataset.index = String(i);
+    cell.title         = `Zone ${i} — ${density} density`;
+
+    if (i === state.userPos) {
+      cell.classList.add('user');
+    }
+
+    if (state.activePath.includes(i) && i !== state.userPos) {
+      cell.classList.add('on-path');
+      const dot       = document.createElement('div');
+      dot.className   = 'path-dot';
+      dot.textContent = '✨';
+      cell.appendChild(dot);
+    }
+
+    cell.style.animation = `fadeIn 0.4s ease forwards ${i * 0.025}s`;
+    cell.style.opacity   = '0';
+
+    mapEl.appendChild(cell);
+  });
+}
+
+// ── Route suggestion ──────────────────────────────────────────
+async function suggestRoute() {
+  const destKey = destinationSelect.value;
+  if (!destKey || state.isLoading) return;
+
+  setLoadingState(true);
+  clearOutput();
+  state.activePath = [];
+  renderMap();
+
+  try {
+    const res = await fetch(`${CONFIG.API_BASE}/suggest-route`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userLocation: state.userPos,
+        destKey,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      // Backend returned a typed error — surface it clearly
+      showError(data.message ?? `Error ${res.status} — please try again.`);
+      return;
+    }
+
+    // Update path and re-render heatmap with highlights
+    state.activePath = data.path ?? [];
+    renderMap();
+
+    showResult(data);
+  } catch (err) {
+    console.error('[SmartFlow] route fetch failed:', err);
+    showError(
+      'Failed to reach the SmartFlow backend. ' +
+      'Is it running on port 3000?'
+    );
+  } finally {
+    setLoadingState(false);
+  }
+}
+
+// ── Output rendering ──────────────────────────────────────────
+function showResult(data) {
+  const riskColors = {
+    low:    '#10b981',
+    medium: '#f59e0b',
+    high:   '#ef4444',
+  };
+  const color = riskColors[data.riskLevel] ?? '#94a3b8';
+
+  aiOutput.classList.remove('hidden');
+  aiOutput.innerHTML = `
+    <div class="result-header">
+      <span class="highlight">✨ Route Calculated</span>
+      <span class="risk-badge" style="
+        background: ${color}22;
+        color: ${color};
+        border: 1px solid ${color}55;
+      ">${(data.riskLevel ?? 'low').toUpperCase()} RISK</span>
+    </div>
+
+    <p class="result-recommendation">${escapeHtml(data.recommendation ?? '')}</p>
+
+    <div class="result-meta">
+      <span>⏱ ${escapeHtml(data.timeSaved ?? '—')}</span>
+      <span>📍 ${data.path?.length ?? 0} zones</span>
+      <span>→ ${escapeHtml(data.destination?.label ?? '')}</span>
+    </div>
+
+    ${data.avoidZoneLabels?.length
+      ? `<div class="result-avoid">
+           <span class="avoid-label">Avoid:</span>
+           ${data.avoidZoneLabels.map(z => `<span class="avoid-tag">${escapeHtml(z)}</span>`).join('')}
+         </div>`
+      : ''}
+  `;
+
+  aiOutput.animate(
+    [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'translateY(0)' }],
+    { duration: 350, fill: 'forwards', easing: 'ease-out' }
+  );
+}
+
+function showError(message) {
+  aiOutput.classList.remove('hidden');
+  aiOutput.innerHTML = `<div class="error-state">⚠️ ${escapeHtml(message)}</div>`;
+}
+
+function clearOutput() {
+  aiOutput.classList.add('hidden');
+  aiOutput.innerHTML = '';
+}
+
+// ── Loading state ─────────────────────────────────────────────
+function setLoadingState(loading) {
+  state.isLoading = loading;
+
+  if (loading) {
+    aiLoading.classList.remove('hidden');
+    aiOutput.classList.add('hidden');
+    suggestBtn.disabled = true;
+    if (refreshBtn) refreshBtn.disabled = true;
+  } else {
+    aiLoading.classList.add('hidden');
+    suggestBtn.disabled = false;
+    if (refreshBtn) refreshBtn.disabled = false;
+  }
+}
+
+// ── Security: prevent XSS from any AI-generated strings ───────
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ── Keyframe styles ───────────────────────────────────────────
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
   @keyframes fadeIn {
-    from { opacity: 0; transform: scale(0.8) translateY(10px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
+    from { opacity: 0; transform: scale(0.85) translateY(8px); }
+    to   { opacity: 1; transform: scale(1)    translateY(0);   }
   }
 `;
 document.head.appendChild(styleSheet);
 
-// Initialize Map
-renderMap();
-
-// 1. Simple pathfinding function (beginner-friendly Dijkstra)
-function findBestPath(start, dest) {
-  const distances = Array(25).fill(Infinity);
-  const previous = Array(25).fill(null);
-  const unvisited = new Set(Array.from({length: 25}, (_, i) => i));
-  
-  distances[start] = 0;
-  
-  const getWeight = (i) => {
-    if (zones[i] === 'high') return 99;   // Heavy penalty for high density
-    if (zones[i] === 'medium') return 3;  // Slight penalty
-    return 1;                             // Smallest cost for low density
-  };
-  
-  while(unvisited.size > 0) {
-    // Pick the unvisited node with the lowest distance
-    let current = null;
-    for (let node of unvisited) {
-      if (current === null || distances[node] < distances[current]) {
-        current = node;
-      }
-    }
-    
-    // Stop if we reached destination or all remaining nodes are unreachable
-    if (distances[current] === Infinity || current === dest) break;
-    
-    unvisited.delete(current);
-    
-    // Calculate valid adjacent neighbors (up, down, left, right)
-    const neighbors = [current - 5, current + 5, current - 1, current + 1].filter(n => {
-      if (n < 0 || n >= 25) return false; // out of bounds
-      if (current % 5 === 0 && n === current - 1) return false; // left edge, can't go left
-      if (current % 5 === 4 && n === current + 1) return false; // right edge, can't go right
-      return true;
-    });
-    
-    for (let neighbor of neighbors) {
-      if (unvisited.has(neighbor)) {
-        let newDist = distances[current] + getWeight(neighbor);
-        if (newDist < distances[neighbor]) {
-          distances[neighbor] = newDist;
-          previous[neighbor] = current;
-        }
-      }
-    }
-  }
-  
-  // Reconstruct the path backwards
-  const path = [];
-  let curr = dest;
-  if (previous[curr] !== null || curr === start) {
-    while (curr !== null) {
-      path.unshift(curr);
-      curr = previous[curr];
-    }
-  }
-  return path;
-}
-
-// 2. Visually highlight the path
-function highlightPath(path) {
-  // Reset previous highlights
-  const cells = document.querySelectorAll('.zone');
-  cells.forEach((cell, i) => {
-    cell.style.boxShadow = '';
-    cell.style.border = '';
-    const icon = cell.querySelector('.path-dot');
-    if (icon) cell.removeChild(icon);
-  });
-  
-  path.forEach((index, step) => {
-    // Skip user tile
-    if (index !== userPos) {
-      setTimeout(() => {
-        const cell = cells[index];
-        // Add visual path indication directly with JS
-        cell.style.boxShadow = 'inset 0 0 0 4px rgba(255, 255, 255, 0.8), inset 0 0 20px rgba(255, 255, 255, 0.5)';
-        cell.style.border = '2px solid white';
-        
-        // Add a dot icon
-        const dot = document.createElement('div');
-        dot.className = 'path-dot';
-        dot.innerHTML = '✨';
-        dot.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 20; font-size: 1.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));';
-        cell.appendChild(dot);
-        
-      }, step * 250); // Stagger animation for nice effect
-    }
-  });
-}
-
-function suggestRoute() {
-  const outputArea = document.getElementById("ai-output");
-  const loadingArea = document.getElementById("ai-loading");
-  const destinationSelect = document.getElementById("destination");
-  
-  const destValue = destinationSelect.value;
-  const destText = destinationSelect.options[destinationSelect.selectedIndex].text;
-  
-  // Show loading spinner, hide previous output
-  outputArea.classList.add("hidden");
-  loadingArea.classList.remove("hidden");
-
-  // Calculate the path!
-  const destIndex = destinations[destValue];
-  const path = findBestPath(userPos, destIndex);
-
-  // Simulate AI Processing Delay
-  setTimeout(() => {
-    loadingArea.classList.add("hidden");
-    outputArea.classList.remove("hidden");
-    
-    // Construct premium styled response
-    const responseText = `
-      <div style="margin-bottom: 0.5rem;"><span class="highlight">✨ Smart Route Calculated.</span></div>
-      <div>Taking an alternative route to the <span class="success-text">${destText}</span> bypasses current high-density congestion. This optimized path ensures flow and saves approximately 8 minutes of transit time.</div>
-    `;
-    
-    outputArea.innerHTML = responseText;
-    
-    // Add brief glow effect to AI panel text
-    outputArea.animate([
-      { opacity: 0, transform: 'translateY(5px)' },
-      { opacity: 1, transform: 'translateY(0)' }
-    ], { duration: 400, delay: 0, fill: 'forwards', easing: 'ease-out' });
-
-    // Draw the highlights
-    highlightPath(path);
-
-  }, 1200);
-}
+// ── Boot ──────────────────────────────────────────────────────
+init();

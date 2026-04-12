@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SmartFlow Dashboard</title>
+  <meta name="description" content="SmartFlow AI — real-time stadium crowd routing and navigation dashboard.">
+  <title>SmartFlow AI — Crowd Navigation</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -16,35 +17,40 @@
         <i class="fa-solid fa-satellite-dish"></i>
         <h1>SmartFlow AI</h1>
       </div>
-      <div class="status-badge">
-        <span class="pulse"></span> System Active
+      <div class="header-right">
+        <button id="refresh-btn" class="btn-ghost" onclick="loadStadiumState()" title="Refresh crowd data">
+          <i class="fa-solid fa-rotate"></i>
+        </button>
+        <div class="status-badge">
+          <span class="pulse"></span> System Active
+        </div>
       </div>
     </header>
 
     <main class="content">
+
       <!-- Controls Panel -->
       <section class="controls-panel card">
         <h2><i class="fa-solid fa-location-crosshairs"></i> Navigation</h2>
-        <p class="subtitle">Select your destination for AI routing</p>
-        
+        <p class="subtitle">Select your destination for AI-optimized routing</p>
+
         <div class="input-group">
           <label for="destination">Destination</label>
           <div class="select-wrapper">
             <i class="fa-solid fa-store icon"></i>
+            <!-- Options populated dynamically from GET /api/stadium-state -->
             <select id="destination">
-              <option value="food">Food Stall Zone A</option>
-              <option value="exit">North Exit Gate</option>
-              <option value="washroom">Main Washroom</option>
+              <option disabled>Loading destinations…</option>
             </select>
           </div>
         </div>
 
-        <button class="btn-primary" onclick="suggestRoute()">
+        <button id="suggest-btn" class="btn-primary" onclick="suggestRoute()">
           <i class="fa-solid fa-route"></i> Suggest Route
         </button>
       </section>
 
-      <!-- Map Section -->
+      <!-- Heatmap Section -->
       <section class="map-section card">
         <div class="map-header">
           <h2>Stadium Heatmap</h2>
@@ -54,8 +60,9 @@
             <div class="legend-item"><span class="color-box high"></span> High</div>
           </div>
         </div>
-        
+
         <div class="map-wrapper">
+          <!-- Rendered by app.js via renderMap() -->
           <div id="map"></div>
         </div>
       </section>
@@ -69,13 +76,14 @@
         <div class="ai-content">
           <div id="ai-loading" class="hidden">
             <div class="spinner"></div>
-            <span>Analyzing crowd density points...</span>
+            <span>Analyzing crowd density points…</span>
           </div>
           <div id="ai-output">
             Select a destination to let AI calculate the optimal, crowd-free path.
           </div>
         </div>
       </section>
+
     </main>
   </div>
 
