@@ -14,39 +14,43 @@
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { zoneLabels } from '../data/stadium.js';
 
 /**
  * Structured output schema.
- * Using string literals ('OBJECT', 'STRING', etc.) for maximum
- * compatibility across SDK patch versions.
  */
 const ROUTE_SCHEMA = {
   type: 'object',
   properties: {
     recommendation: {
       type: 'string',
-      description: '1–2 sentence route recommendation in confident, system-output tone. No "I suggest". No disclaimers.',
+      description: '1–2 sentence route recommendation. Confident system-output tone. Reference specific location NAMES (e.g. "Food Court", "Gate A"), never raw indices. No "I suggest". No disclaimers.',
     },
     avoidZoneLabels: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Specific zone labels to avoid, e.g. ["Zone 6 (high)", "Zone 7 (high)"]',
+      description: 'Location names to avoid — use descriptive labels like "Food Court", "Main Entry". NOT raw zone indices.',
     },
     timeSaved: {
       type: 'string',
-      description: 'Estimated time saved vs direct route, e.g. "~4 minutes"',
+      description: 'Estimated time saved vs a direct route through congestion, e.g. "~5 min" or "3–5 min".',
     },
     routeReason: {
       type: 'string',
-      description: 'One-sentence technical reason for the path choice.',
+      description: 'One clear sentence explaining WHY this path was chosen, referencing specific congestion zones by name.',
     },
     riskLevel: {
       type: 'string',
       enum: ['low', 'medium', 'high'],
       description: 'Overall risk level of the suggested route.',
     },
+    confidence: {
+      type: 'string',
+      enum: ['high', 'medium', 'low'],
+      description: 'AI confidence in the recommendation. High = clear optimal path, Low = multiple risky zones unavoidable.',
+    },
   },
-  required: ['recommendation', 'avoidZoneLabels', 'timeSaved', 'routeReason', 'riskLevel'],
+  required: ['recommendation', 'avoidZoneLabels', 'timeSaved', 'routeReason', 'riskLevel', 'confidence'],
 };
 
 // Lazily initialised — we don't throw at module load so the server can
@@ -70,17 +74,26 @@ function getModel() {
 }
 
 /**
+ * Build a labeled map string for the prompt so Gemini references
+ * real location names, not "Zone 6".
+ */
+function buildGridDescription(zones) {
+  const rows = [];
+  for (let r = 0; r < 5; r++) {
+    const cells = [];
+    for (let c = 0; c < 5; c++) {
+      const i = r * 5 + c;
+      cells.push(`${zoneLabels[i]} (${zones[i]})`);
+    }
+    rows.push(`  Row ${r}: ${cells.join(' | ')}`);
+  }
+  return rows.join('\n');
+}
+
+/**
  * Get a structured AI explanation for a pre-computed route.
  * Gemini does NOT do pathfinding — the path is already computed.
  * Gemini only adds the human-readable explanation layer.
- *
- * @param {object} params
- * @param {number}   params.userLocation    Start grid index
- * @param {object}   params.destination     { key, label, gridIndex }
- * @param {number[]} params.path            Computed optimal path
- * @param {string[]} params.zones           Full zone density array
- * @param {string[]} params.allHighZones    All high-density zone labels in stadium
- * @returns {Promise<{recommendation, avoidZoneLabels, timeSaved, routeReason, riskLevel}>}
  */
 export async function getRouteExplanation({
   userLocation,
@@ -89,35 +102,47 @@ export async function getRouteExplanation({
   zones,
   allHighZones,
 }) {
+  // Map path indices to location names for the prompt
+  const pathNames = path.map(i => zoneLabels[i]);
+  const avoidNames = allHighZones.map(z => {
+    const idx = parseInt(z.replace('Zone ', ''));
+    return isNaN(idx) ? z : zoneLabels[idx];
+  });
+
   const prompt = `
-You are a real-time AI routing module embedded in SmartFlow, a stadium crowd management system.
+You are the SmartFlow AI — a real-time crowd intelligence engine for stadium operations.
 
-SYSTEM STATE:
-- User grid index: ${userLocation}
-- Destination: ${destination.label} (grid index ${destination.gridIndex})
-- Computed optimal path (indices): [${path.join(', ')}] — ${path.length} zones
-- High-density zones in stadium: [${allHighZones.join(', ')}]
-- Full grid (25 zones, index 0–24): ${JSON.stringify(zones)}
+VENUE LAYOUT (5×5 grid, each cell = a named zone with crowd density):
+${buildGridDescription(zones)}
 
-PATHFINDING IS ALREADY DONE. Your ONLY job:
-1. Write a confident, direct 1–2 sentence system-output recommendation.
-2. Name the high-density zones that the route avoids or that the user should be aware of.
-3. Estimate time saved versus the direct route.
-4. Give a brief technical reason for the chosen path.
-5. Assess the overall route risk level.
+ROUTING CONTEXT:
+- User is at: ${zoneLabels[userLocation]} (index ${userLocation})
+- Destination: ${destination.label} (index ${destination.gridIndex})
+- Computed optimal path: ${pathNames.join(' → ')} (${path.length} zones)
+- High-congestion areas to avoid: ${avoidNames.join(', ')}
 
-STRICT TONE RULES:
-- Sound like a live operations system, not a chatbot or assistant.
-- Do NOT use "I suggest", "I recommend", "please", or any hedging language.
-- Do NOT add disclaimers or caveats.
-- Be specific (mention zone indices, density levels).
-- Be concise.
+YOUR JOB — generate a smart, structured route briefing:
+
+1. RECOMMENDATION: Write 1–2 sentences as if you are a live operations system displaying on a dashboard. Reference LOCATION NAMES, not indices. Be direct: "Route via West Wing and Section W bypasses Food Court congestion."
+
+2. AVOID ZONES: List the specific high-density LOCATION NAMES the route avoids (e.g., "Food Court", "Main Entry").
+
+3. TIME SAVED: Estimate realistic time savings vs walking through congestion (e.g., "~4 min", "3–5 min").
+
+4. ROUTE REASON: One clear sentence — why THIS path. Mention the specific bottleneck it avoids.
+
+5. RISK LEVEL: Overall crowd-risk of the path (low/medium/high).
+
+6. CONFIDENCE: Your confidence in this being optimal (high/medium/low).
+
+TONE:
+- Sound like a live operations display, not a chatbot.
+- Never say "I suggest", "I recommend", "please".
+- Be specific. Name real locations. Be concise.
 `.trim();
 
   const result = await getModel().generateContent(prompt);
   const text   = result.response.text();
 
-  // With responseMimeType: "application/json", this is always valid JSON.
-  // If somehow not, let the error propagate — route.js handles it.
   return JSON.parse(text);
 }

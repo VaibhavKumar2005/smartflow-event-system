@@ -11,6 +11,7 @@
 import { Router } from 'express';
 import {
   zones,
+  zoneLabels,
   destinations,
   DEFAULT_USER_POS,
   GRID_SIZE,
@@ -21,6 +22,7 @@ const router = Router();
 router.get('/stadium-state', (req, res) => {
   res.json({
     zones,
+    zoneLabels,
     destinations,
     userPos:  DEFAULT_USER_POS,
     gridSize: GRID_SIZE,

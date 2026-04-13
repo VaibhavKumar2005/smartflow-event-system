@@ -1,544 +1,376 @@
 /**
- * frontend/app.js — SmartFlow Dashboard
- * ───────────────────────────────────────
- * Core routing & state logic is UNCHANGED.
- * Only UI helpers updated to use new component class names.
- *
- * Architecture:
- *   GET  /api/stadium-state  → zones, destinations, userPos
- *   POST /api/suggest-route  → path, recommendation, riskLevel, timeSaved
+ * frontend/app.js — SmartFlow Dashboard (Hackathon Demo)
+ * ─────────────────────────────────────────────────────────
+ * Core logic UNCHANGED. UI optimized for demo clarity:
+ * - Zone names on heatmap cells
+ * - Confidence badge from AI
+ * - Cleaner alert messages with location names
  */
 
-// ── Config ────────────────────────────────────────────────────
-const CONFIG = {
-  API_BASE: 'http://localhost:3000/api',
-};
+const CONFIG = { API_BASE: 'http://localhost:3000/api' };
 
-// ── App State ─────────────────────────────────────────────────
 const state = {
-  zones:        [],   // 'low' | 'medium' | 'high', 25 entries
-  destinations: [],   // { key, label, gridIndex }[]
-  userPos:      12,
-  gridSize:     5,
-  activePath:   [],
-  isLoading:    false,
-  lastRoute:    null,
-  alertHistory: [],
+  zones:       [],
+  zoneLabels:  [],
+  destinations:[],
+  userPos:     12,
+  gridSize:    5,
+  activePath:  [],
+  isLoading:   false,
+  lastRoute:   null,
+  alertHistory:[],
 };
 
-// ── DOM Refs ──────────────────────────────────────────────────
-const mapEl             = document.getElementById('map');
-const destinationSelect = document.getElementById('destination');
-const aiOutput          = document.getElementById('ai-output');
-const aiLoading         = document.getElementById('ai-loading');
-const aiPlaceholder     = document.getElementById('ai-placeholder');
-const suggestBtn        = document.getElementById('suggest-btn');
-const refreshBtn        = document.getElementById('refresh-btn');
-const alertsList        = document.getElementById('alerts-list');
-const alertCountBadge   = document.getElementById('alert-count-badge');
-const confidenceBadge   = document.getElementById('confidence-badge');
-const pathStatus        = document.getElementById('path-status');
-const pathStatusText    = document.getElementById('path-status-text');
+// DOM refs
+const mapEl    = document.getElementById('map');
+const destSel  = document.getElementById('destination');
+const aiOut    = document.getElementById('ai-output');
+const aiLoad   = document.getElementById('ai-loading');
+const aiIdle   = document.getElementById('ai-placeholder');
+const sugBtn   = document.getElementById('suggest-btn');
+const refBtn   = document.getElementById('refresh-btn');
+const alertsEl = document.getElementById('alerts-list');
+const alertBdg = document.getElementById('alert-badge');
+const confBdg  = document.getElementById('conf-badge');
+const pathBar  = document.getElementById('path-bar');
+const pathTxt  = document.getElementById('path-bar-text');
 
-// KPI value spans
-const kpiDensity     = document.getElementById('kpi-density');
-const kpiDensitySub  = document.getElementById('kpi-density-sub');
-const kpiWait        = document.getElementById('kpi-wait');
-const kpiSafe        = document.getElementById('kpi-safe');
-const kpiSafeSub     = document.getElementById('kpi-safe-sub');
-const kpiEfficiency  = document.getElementById('kpi-efficiency');
-
-// KPI bars
-const kpiDensityBar    = document.getElementById('kpi-density-bar');
-const kpiWaitBar       = document.getElementById('kpi-wait-bar');
-const kpiSafeBar       = document.getElementById('kpi-safe-bar');
-const kpiEfficiencyBar = document.getElementById('kpi-efficiency-bar');
-
-// Header chips
-const chipDensity = document.getElementById('chip-density');
-const chipWait    = document.getElementById('chip-wait');
-const chipSafe    = document.getElementById('chip-safe');
-
-// Metric panel
-const metricHigh = document.getElementById('metric-high');
-const metricMed  = document.getElementById('metric-med');
-const metricLow  = document.getElementById('metric-low');
+const kpiDensity    = document.getElementById('kpi-density');
+const kpiDensitySub = document.getElementById('kpi-density-sub');
+const kpiWait       = document.getElementById('kpi-wait');
+const kpiSafe       = document.getElementById('kpi-safe');
+const kpiSafeSub    = document.getElementById('kpi-safe-sub');
+const kpiEfficiency = document.getElementById('kpi-efficiency');
+const kpiDensityBar = document.getElementById('kpi-density-bar');
+const kpiWaitBar    = document.getElementById('kpi-wait-bar');
+const kpiSafeBar    = document.getElementById('kpi-safe-bar');
+const kpiEffBar     = document.getElementById('kpi-efficiency-bar');
 
 let crowdChart = null;
 
-// ── Boot ──────────────────────────────────────────────────────
+// ── Init ─────────────────────────────────────────────────
 async function init() {
   startClock();
   await loadStadiumState();
-  initCrowdChart();
+  initChart();
   lucide.createIcons();
 }
 
-// ── Live Clock ────────────────────────────────────────────────
 function startClock() {
   const el = document.getElementById('live-time');
   if (!el) return;
-  const tick = () => {
-    el.textContent = new Date().toLocaleTimeString('en-US', {
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-    });
-  };
-  tick();
-  setInterval(tick, 1000);
+  const t = () => el.textContent = new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false });
+  t(); setInterval(t, 1000);
 }
 
-// ── Load Stadium State ────────────────────────────────────────
+// ── Load State ─────────────────────────────────────────
 async function loadStadiumState() {
-  setLoadingState(true);
-
+  loading(true);
   try {
     const res = await fetch(`${CONFIG.API_BASE}/stadium-state`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+    state.zones       = d.zones;
+    state.zoneLabels  = d.zoneLabels || [];
+    state.destinations= d.destinations;
+    state.userPos     = d.userPos;
+    state.gridSize    = d.gridSize;
+    state.activePath  = [];
+    state.lastRoute   = null;
 
-    const data = await res.json();
-    state.zones        = data.zones;
-    state.destinations = data.destinations;
-    state.userPos      = data.userPos;
-    state.gridSize     = data.gridSize;
-    state.activePath   = [];
-    state.lastRoute    = null;
-
-    populateDestinations();
+    fillDest();
     renderMap();
     updateKPIs();
-    updateZoneMetrics();
-    generateAlerts();
+    genAlerts();
     hidePath();
     lucide.createIcons();
-
-  } catch (err) {
-    console.error('[SmartFlow] init failed:', err);
-    showError(
-      'Cannot connect to SmartFlow backend. ' +
-      'Make sure the server is running on port 3000.'
-    );
-  } finally {
-    setLoadingState(false);
-  }
+  } catch (e) {
+    console.error('[SmartFlow]', e);
+    showError('Cannot connect to SmartFlow backend. Make sure the server is running on port 3000.');
+  } finally { loading(false); }
 }
 
-// ── Destinations Select ───────────────────────────────────────
-function populateDestinations() {
-  destinationSelect.innerHTML = '';
-  state.destinations.forEach(dest => {
-    const opt   = document.createElement('option');
-    opt.value   = dest.key;
-    opt.textContent = dest.label;
-    destinationSelect.appendChild(opt);
+function fillDest() {
+  destSel.innerHTML = '';
+  state.destinations.forEach(d => {
+    const o = document.createElement('option');
+    o.value = d.key;
+    o.textContent = d.label;
+    destSel.appendChild(o);
   });
 }
 
-// ── KPI Calculations ──────────────────────────────────────────
+// ── KPIs ─────────────────────────────────────────────────
 function updateKPIs() {
-  const zones    = state.zones;
-  const total    = zones.length;
-  const lowCount  = zones.filter(z => z === 'low').length;
-  const medCount  = zones.filter(z => z === 'medium').length;
-  const highCount = zones.filter(z => z === 'high').length;
+  const z = state.zones, n = z.length;
+  const lo = z.filter(v => v === 'low').length;
+  const md = z.filter(v => v === 'medium').length;
+  const hi = z.filter(v => v === 'high').length;
 
-  // Crowd density
-  const densityScore = Math.round(((medCount * 0.5 + highCount) / total) * 100);
-  const densityLabel = densityScore > 60 ? 'High' : densityScore > 30 ? 'Medium' : 'Low';
+  const ds = Math.round(((md * 0.5 + hi) / n) * 100);
+  const dl = ds > 60 ? 'High' : ds > 30 ? 'Medium' : 'Low';
+  kpiDensity.textContent = dl;
+  kpiDensitySub.textContent = ds > 50 ? 'Above normal' : 'Normal range';
+  kpiDensity.style.color = ds > 60 ? 'var(--red)' : ds > 30 ? 'var(--amber)' : 'var(--green)';
+  barW(kpiDensityBar, ds);
 
-  kpiDensity.textContent    = densityLabel;
-  kpiDensitySub.textContent = densityScore > 50 ? 'Above normal' : 'Normal range';
-  kpiDensity.style.color    = densityScore > 60 ? 'var(--destructive)' : densityScore > 30 ? 'var(--warning)' : 'var(--success)';
-  setBarWidth(kpiDensityBar, densityScore);
-  if (chipDensity) chipDensity.textContent = densityLabel;
+  const wt = Math.round(2 + (ds / 100) * 8);
+  kpiWait.textContent = `${wt} min`;
+  barW(kpiWaitBar, (wt / 10) * 100);
 
-  // Avg wait time
-  const avgWait = Math.round(2 + (densityScore / 100) * 8);
-  kpiWait.textContent = `${avgWait} min`;
-  setBarWidth(kpiWaitBar, (avgWait / 10) * 100);
-  if (chipWait) chipWait.textContent = `${avgWait} min`;
+  kpiSafe.textContent = lo;
+  kpiSafeSub.textContent = `of ${n}`;
+  kpiSafe.style.color = lo >= 12 ? 'var(--green)' : lo >= 6 ? 'var(--amber)' : 'var(--red)';
+  barW(kpiSafeBar, (lo / n) * 100);
 
-  // Safe zones
-  kpiSafe.textContent    = lowCount;
-  kpiSafeSub.textContent = `of ${total} zones`;
-  kpiSafe.style.color    = lowCount >= 12 ? 'var(--success)' : lowCount >= 6 ? 'var(--warning)' : 'var(--destructive)';
-  setBarWidth(kpiSafeBar, (lowCount / total) * 100);
-  if (chipSafe) chipSafe.textContent = `${lowCount} / ${total}`;
-
-  // Efficiency
   if (state.lastRoute) {
-    const pathLen    = state.lastRoute.path?.length ?? 0;
-    const directDist = estimateDirectDistance(state.userPos, state.lastRoute.destination?.gridIndex ?? 0);
-    const eff        = directDist > 0 ? Math.round(Math.min(100, (directDist / pathLen) * 100)) : 100;
-    kpiEfficiency.textContent = `+${Math.max(0, eff - 60)}%`;
-    kpiEfficiency.style.color = eff >= 80 ? 'var(--success)' : eff >= 50 ? 'var(--warning)' : 'var(--destructive)';
-    setBarWidth(kpiEfficiencyBar, eff);
+    const pl = state.lastRoute.path?.length ?? 0;
+    const dd = manhattan(state.userPos, state.lastRoute.destination?.gridIndex ?? 0);
+    const ef = dd > 0 ? Math.round(Math.min(100, (dd / pl) * 100)) : 100;
+    kpiEfficiency.textContent = `+${Math.max(0, ef - 60)}%`;
+    kpiEfficiency.style.color = ef >= 80 ? 'var(--green)' : ef >= 50 ? 'var(--amber)' : 'var(--red)';
+    barW(kpiEffBar, ef);
   } else {
     kpiEfficiency.textContent = '—';
-    kpiEfficiency.style.color = 'var(--muted-fg)';
-    setBarWidth(kpiEfficiencyBar, 0);
+    kpiEfficiency.style.color = 'var(--muted)';
+    barW(kpiEffBar, 0);
   }
 }
 
-function setBarWidth(el, pct) {
-  if (!el) return;
-  requestAnimationFrame(() => { el.style.width = `${Math.min(100, Math.max(0, pct))}%`; });
+function barW(el, p) { if (el) requestAnimationFrame(() => el.style.width = `${Math.min(100, Math.max(0, p))}%`); }
+function manhattan(a, b) {
+  const s = state.gridSize;
+  return Math.abs(a % s - b % s) + Math.abs(Math.floor(a / s) - Math.floor(b / s)) + 1;
 }
 
-function estimateDirectDistance(from, to) {
-  const s  = state.gridSize;
-  const fx = from % s, fy = Math.floor(from / s);
-  const tx = to   % s, ty = Math.floor(to   / s);
-  return Math.abs(fx - tx) + Math.abs(fy - ty) + 1;
-}
-
-// ── Zone Metrics ──────────────────────────────────────────────
-function updateZoneMetrics() {
-  const zones = state.zones;
-  if (metricHigh) metricHigh.textContent = zones.filter(z => z === 'high').length;
-  if (metricMed)  metricMed.textContent  = zones.filter(z => z === 'medium').length;
-  if (metricLow)  metricLow.textContent  = zones.filter(z => z === 'low').length;
-}
-
-// ── Alerts ────────────────────────────────────────────────────
-function generateAlerts() {
-  const names  = ['Gate A', 'Food Court', 'Main Concourse', 'Section B', 'West Exit', 'VIP Lounge', 'East Gate', 'Parking Lot'];
-  const alerts = [];
-
+// ── Alerts ─────────────────────────────────────────────
+function genAlerts() {
+  const a = [];
   state.zones.forEach((z, i) => {
     if (z === 'high') {
-      alerts.push({
-        severity: 'high',
-        icon:     'alert-triangle',
-        text:     `High congestion at ${names[i % names.length]} (Zone ${i})`,
-        time:     `${Math.floor(Math.random() * 5) + 1}m ago`,
-      });
+      const name = state.zoneLabels[i] || `Zone ${i}`;
+      a.push({ sev: 'high', icon: 'alert-triangle', text: `High congestion: ${name}`, time: `${Math.floor(Math.random()*5)+1}m ago` });
     }
   });
-
-  const medCount = state.zones.filter(z => z === 'medium').length;
-  if (medCount > 4) {
-    alerts.push({
-      severity: 'medium',
-      icon:     'alert-circle',
-      text:     `Queue spike — ${medCount} zones at capacity`,
-      time:     'Just now',
-    });
-  }
-
-  alerts.push({ severity: 'info', icon: 'cpu', text: 'AI routing engine operational', time: 'System' });
-
-  state.alertHistory = alerts;
+  const mc = state.zones.filter(z => z === 'medium').length;
+  if (mc > 4) a.push({ sev: 'medium', icon: 'alert-circle', text: `Moderate load in ${mc} zones`, time: 'Just now' });
+  a.push({ sev: 'info', icon: 'cpu', text: 'AI routing engine active', time: 'System' });
+  state.alertHistory = a;
   renderAlerts();
 }
 
 function renderAlerts() {
-  const alerts = state.alertHistory;
-  alertsList.innerHTML = '';
-
-  if (alerts.length === 0) {
-    alertsList.innerHTML = `
-      <div class="alert-item alert-info">
-        <i data-lucide="check-circle" style="width:13px;height:13px;color:var(--success);flex-shrink:0"></i>
-        <span class="alert-text">All clear — no active alerts</span>
-      </div>`;
-    alertCountBadge.classList.add('hidden');
-    lucide.createIcons();
-    return;
+  alertsEl.innerHTML = '';
+  const a = state.alertHistory;
+  if (!a.length) {
+    alertsEl.innerHTML = '<div class="alert-row alert-info"><i data-lucide="check-circle" style="width:12px;height:12px;color:var(--green)"></i><span>All clear</span></div>';
+    alertBdg.classList.add('hidden');
+    lucide.createIcons(); return;
   }
+  const hc = a.filter(x => x.sev === 'high').length;
+  if (hc) { alertBdg.textContent = hc; alertBdg.classList.remove('hidden'); }
+  else alertBdg.classList.add('hidden');
 
-  const highCount = alerts.filter(a => a.severity === 'high').length;
-  if (highCount > 0) {
-    alertCountBadge.textContent = `${highCount} critical`;
-    alertCountBadge.classList.remove('hidden');
-  } else {
-    alertCountBadge.classList.add('hidden');
-  }
-
-  alerts.forEach((alert, idx) => {
-    const colorMap = { high: 'var(--destructive)', medium: 'var(--warning)', info: 'var(--blue)' };
+  const cmap = { high: 'var(--red)', medium: 'var(--amber)', info: 'var(--blue)' };
+  a.forEach((al, i) => {
     const el = document.createElement('div');
-    el.className = `alert-item alert-${alert.severity}`;
-    el.style.animationDelay = `${idx * 0.04}s`;
-    el.innerHTML = `
-      <i data-lucide="${alert.icon}" style="width:13px;height:13px;color:${colorMap[alert.severity]};flex-shrink:0"></i>
-      <span class="alert-text">${escapeHtml(alert.text)}</span>
-      <span class="alert-time">${escapeHtml(alert.time)}</span>
-    `;
-    alertsList.appendChild(el);
+    el.className = `alert-row alert-${al.sev}`;
+    el.style.animationDelay = `${i * .04}s`;
+    el.innerHTML = `<i data-lucide="${al.icon}" style="width:12px;height:12px;color:${cmap[al.sev]};flex-shrink:0"></i><span class="alert-text">${esc(al.text)}</span><span class="alert-time">${esc(al.time)}</span>`;
+    alertsEl.appendChild(el);
   });
-
   lucide.createIcons();
 }
 
-// ── Crowd Trend Chart ─────────────────────────────────────────
-function initCrowdChart() {
+// ── Chart ─────────────────────────────────────────────
+function initChart() {
   const ctx = document.getElementById('crowd-chart');
   if (!ctx) return;
   if (crowdChart) { crowdChart.destroy(); crowdChart = null; }
 
-  const labels   = ['T-8', 'T-7', 'T-6', 'T-5', 'T-4', 'T-3', 'T-2', 'Now'];
-  const baseHigh = state.zones.filter(z => z === 'high').length;
-  const baseMed  = state.zones.filter(z => z === 'medium').length;
-  const baseLow  = state.zones.filter(z => z === 'low').length;
-
-  const jitter = (base, range) =>
-    labels.map(() => Math.max(0, base + Math.round((Math.random() - 0.5) * range * 2)));
-
-  const highData = jitter(baseHigh, 2); highData[7] = baseHigh;
-  const medData  = jitter(baseMed,  2); medData[7]  = baseMed;
-  const lowData  = jitter(baseLow,  2); lowData[7]  = baseLow;
+  const labels = ['T-8','T-7','T-6','T-5','T-4','T-3','T-2','Now'];
+  const bH = state.zones.filter(z => z === 'high').length;
+  const bM = state.zones.filter(z => z === 'medium').length;
+  const bL = state.zones.filter(z => z === 'low').length;
+  const jit = (b, r) => labels.map(() => Math.max(0, b + Math.round((Math.random()-.5)*r*2)));
+  const dH = jit(bH,2); dH[7]=bH;
+  const dM = jit(bM,2); dM[7]=bM;
+  const dL = jit(bL,2); dL[7]=bL;
 
   crowdChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        { label: 'High',     data: highData, borderColor: 'hsl(0,72%,55%)',    backgroundColor: 'hsla(0,72%,55%,0.07)',    fill: true, tension: 0.4, pointRadius: 0, pointHoverRadius: 4, borderWidth: 1.5 },
-        { label: 'Moderate', data: medData,  borderColor: 'hsl(38,92%,50%)',   backgroundColor: 'hsla(38,92%,50%,0.06)',   fill: true, tension: 0.4, pointRadius: 0, pointHoverRadius: 4, borderWidth: 1.5 },
-        { label: 'Low',      data: lowData,  borderColor: 'hsl(142,71%,42%)',  backgroundColor: 'hsla(142,71%,42%,0.06)', fill: true, tension: 0.4, pointRadius: 0, pointHoverRadius: 4, borderWidth: 1.5 },
-      ],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { intersect: false, mode: 'index' },
-      plugins: {
-        legend: {
-          position: 'top', align: 'end',
-          labels: { color: 'hsl(215,15%,40%)', font: { size: 9, family: 'Inter' }, boxWidth: 8, boxHeight: 8, borderRadius: 2, useBorderRadius: true, padding: 10 },
-        },
-        tooltip: {
-          backgroundColor: 'hsl(222,70%,5.5%)',
-          borderColor: 'hsl(217,25%,14%)', borderWidth: 1,
-          titleFont: { family: 'Inter', size: 10 }, bodyFont: { family: 'Inter', size: 10 },
-          padding: 8, cornerRadius: 8, displayColors: true, boxPadding: 3,
-        },
+    type:'line',
+    data:{ labels, datasets:[
+      { label:'High', data:dH, borderColor:'hsl(0,72%,55%)', backgroundColor:'hsla(0,72%,55%,.06)', fill:true, tension:.4, pointRadius:0, pointHoverRadius:3, borderWidth:1.5 },
+      { label:'Medium', data:dM, borderColor:'hsl(38,92%,50%)', backgroundColor:'hsla(38,92%,50%,.05)', fill:true, tension:.4, pointRadius:0, pointHoverRadius:3, borderWidth:1.5 },
+      { label:'Low', data:dL, borderColor:'hsl(142,71%,42%)', backgroundColor:'hsla(142,71%,42%,.05)', fill:true, tension:.4, pointRadius:0, pointHoverRadius:3, borderWidth:1.5 },
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{intersect:false,mode:'index'},
+      plugins:{
+        legend:{position:'top',align:'end',labels:{color:'hsl(215,15%,40%)',font:{size:9,family:'Inter'},boxWidth:7,boxHeight:7,borderRadius:2,useBorderRadius:true,padding:8}},
+        tooltip:{backgroundColor:'hsl(222,70%,5.5%)',borderColor:'hsl(217,25%,14%)',borderWidth:1,titleFont:{family:'Inter',size:9},bodyFont:{family:'Inter',size:9},padding:6,cornerRadius:6,displayColors:true,boxPadding:2},
       },
-      scales: {
-        x: { ticks: { color: 'hsl(215,15%,35%)', font: { size: 9, family: 'Inter' } }, grid: { color: 'rgba(255,255,255,0.025)' }, border: { display: false } },
-        y: { beginAtZero: true, ticks: { color: 'hsl(215,15%,35%)', font: { size: 9, family: 'Inter' }, stepSize: 2 }, grid: { color: 'rgba(255,255,255,0.025)' }, border: { display: false } },
+      scales:{
+        x:{ticks:{color:'hsl(215,15%,35%)',font:{size:8,family:'Inter'}},grid:{color:'rgba(255,255,255,.02)'},border:{display:false}},
+        y:{beginAtZero:true,ticks:{color:'hsl(215,15%,35%)',font:{size:8,family:'Inter'},stepSize:2},grid:{color:'rgba(255,255,255,.02)'},border:{display:false}},
       },
     },
   });
 }
 
-// ── Heatmap Rendering ─────────────────────────────────────────
+// ── Heatmap ─────────────────────────────────────────────
 function renderMap() {
   mapEl.innerHTML = '';
-
   state.zones.forEach((density, i) => {
-    const cell      = document.createElement('div');
+    const cell = document.createElement('div');
     cell.classList.add('zone', density);
-    cell.dataset.index = String(i);
-    cell.title         = `Zone ${i} — ${density} density`;
+    cell.dataset.index = i;
+    const name = state.zoneLabels[i] || `Zone ${i}`;
+    cell.title = `${name} — ${density} density`;
 
-    const label     = document.createElement('span');
-    label.className = 'zone-label';
-    label.textContent = i;
-    cell.appendChild(label);
+    // Zone index (tiny corner)
+    const idx = document.createElement('span');
+    idx.className = 'zone-idx';
+    idx.textContent = i;
+    cell.appendChild(idx);
 
+    // Zone name (centered label)
+    const lbl = document.createElement('span');
+    lbl.className = 'zone-name';
+    lbl.textContent = name;
+    cell.appendChild(lbl);
+
+    // User marker
     if (i === state.userPos) {
       cell.classList.add('user');
-      const icon     = document.createElement('div');
-      icon.className = 'user-icon';
-      icon.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
-      cell.appendChild(icon);
+      const ub = document.createElement('span');
+      ub.className = 'user-badge';
+      ub.textContent = 'YOU';
+      cell.appendChild(ub);
     }
 
+    // Path
     if (state.activePath.includes(i) && i !== state.userPos) {
       cell.classList.add('on-path');
-
       if (state.lastRoute && i === state.lastRoute.destination?.gridIndex) {
-        cell.classList.add('destination');
-        const destIcon     = document.createElement('div');
-        destIcon.className = 'dest-icon';
-        destIcon.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
-        cell.appendChild(destIcon);
+        cell.classList.add('dest');
+        const dp = document.createElement('div');
+        dp.className = 'dest-pin';
+        dp.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
+        cell.appendChild(dp);
       } else {
-        const stepIdx   = state.activePath.indexOf(i);
-        const stepEl    = document.createElement('div');
-        stepEl.className = 'path-step-num';
-        stepEl.textContent = stepIdx;
-        cell.appendChild(stepEl);
+        const pn = document.createElement('div');
+        pn.className = 'path-num';
+        pn.textContent = state.activePath.indexOf(i);
+        cell.appendChild(pn);
       }
     }
 
-    cell.style.animation = `fadeIn 0.3s ease forwards ${i * 0.018}s`;
-    cell.style.opacity   = '0';
+    cell.style.animation = `fadeIn .3s ease forwards ${i * .015}s`;
+    cell.style.opacity = '0';
     mapEl.appendChild(cell);
   });
 }
 
-// ── Path Status Bar ───────────────────────────────────────────
-function showPathBar(data) {
-  if (!pathStatus) return;
-  pathStatus.classList.remove('hidden');
-  if (pathStatusText) {
-    const dest  = data.destination?.label ?? 'Destination';
-    const zones = data.path?.length ?? 0;
-    pathStatusText.textContent = `Route to ${dest} · ${zones} zones · ${data.timeSaved ?? '—'}`;
-  }
+// ── Path bar ─────────────────────────────────────────────
+function showPath(d) {
+  if (!pathBar) return;
+  pathBar.classList.remove('hidden');
+  if (pathTxt) pathTxt.textContent = `Route to ${d.destination?.label ?? '—'} · ${d.path?.length ?? 0} zones · ${d.timeSaved ?? '—'}`;
 }
-
-function hidePath() {
-  pathStatus?.classList.add('hidden');
-}
-
-// ── Clear Route ───────────────────────────────────────────────
+function hidePath() { pathBar?.classList.add('hidden'); }
 function clearRoute() {
-  state.activePath = [];
-  state.lastRoute  = null;
-  hidePath();
-  renderMap();
-  updateKPIs();
-  showPlaceholder();
-  confidenceBadge.classList.add('hidden');
+  state.activePath = []; state.lastRoute = null;
+  hidePath(); renderMap(); updateKPIs(); showIdle();
+  confBdg.classList.add('hidden');
 }
 
-// ── Route Suggestion ──────────────────────────────────────────
+// ── Route ─────────────────────────────────────────────
 async function suggestRoute() {
-  const destKey = destinationSelect.value;
-  if (!destKey || state.isLoading) return;
-
-  setLoadingState(true);
+  const dk = destSel.value;
+  if (!dk || state.isLoading) return;
+  loading(true);
   state.activePath = [];
-  renderMap();
-  hidePath();
+  renderMap(); hidePath();
 
   try {
     const res = await fetch(`${CONFIG.API_BASE}/suggest-route`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userLocation: state.userPos, destKey }),
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ userLocation: state.userPos, destKey: dk }),
     });
+    const d = await res.json();
+    if (!res.ok) { showError(d.message ?? `Error ${res.status}`); return; }
 
-    const data = await res.json();
-
-    if (!res.ok) {
-      showError(data.message ?? `Error ${res.status} — please try again.`);
-      return;
-    }
-
-    state.activePath = data.path ?? [];
-    state.lastRoute  = data;
+    state.activePath = d.path ?? [];
+    state.lastRoute = d;
     renderMap();
     updateKPIs();
-    updateZoneMetrics();
-    showResult(data);
-    showPathBar(data);
+    showResult(d);
+    showPath(d);
 
-    // Route added to alert feed
     state.alertHistory.unshift({
-      severity: 'info',
-      icon:     'route',
-      text:     `Route to ${data.destination?.label ?? 'destination'} — ${data.path?.length ?? 0} zones`,
-      time:     'Just now',
+      sev:'info', icon:'route',
+      text:`Route to ${d.destination?.label ?? '?'} — ${d.path?.length ?? 0} zones`,
+      time:'Just now',
     });
     renderAlerts();
     lucide.createIcons();
-
-  } catch (err) {
-    console.error('[SmartFlow] route fetch failed:', err);
-    showError('Failed to reach the SmartFlow backend. Is it running on port 3000?');
-  } finally {
-    setLoadingState(false);
-  }
+  } catch (e) {
+    console.error('[SmartFlow]', e);
+    showError('Failed to reach backend. Is it running on port 3000?');
+  } finally { loading(false); }
 }
 
-// ── AI Result Output (structured) ────────────────────────────
-function showResult(data) {
-  aiPlaceholder.classList.add('hidden');
-  aiOutput.classList.remove('hidden');
+// ── AI Display ─────────────────────────────────────────
+function showResult(d) {
+  aiIdle.classList.add('hidden');
+  aiOut.classList.remove('hidden');
 
-  const risk = data.riskLevel ?? 'low';
-  const riskBadgeClass = { low: 'badge-success', medium: 'badge-warning', high: 'badge-destructive' }[risk] ?? 'badge-muted';
+  const risk = d.riskLevel ?? 'low';
+  const riskCls = { low:'badge-green', medium:'badge-amber', high:'badge-red' }[risk] ?? 'badge-blue';
 
-  // Confidence badge in card header
-  const conf = data.confidence ?? risk;
-  const confClass = { high: 'badge-success', medium: 'badge-warning', low: 'badge-destructive' }[conf] ?? 'badge-muted';
-  confidenceBadge.className = `badge ${confClass}`;
-  confidenceBadge.textContent = conf.toUpperCase() + ' CONF';
-  confidenceBadge.classList.remove('hidden');
+  const conf = d.confidence ?? 'high';
+  const confCls = { high:'badge-green', medium:'badge-amber', low:'badge-red' }[conf] ?? 'badge-blue';
+  confBdg.className = `badge ${confCls}`;
+  confBdg.textContent = `${conf} CONF`;
+  confBdg.classList.remove('hidden');
 
-  aiOutput.innerHTML = `
+  aiOut.innerHTML = `
     <div class="ai-result">
-      <div class="ai-result-header">
-        <span class="ai-route-name">✦ ${escapeHtml(data.destination?.label ?? 'Optimal Route')}</span>
-        <span class="badge ${riskBadgeClass}">${risk.toUpperCase()} RISK</span>
+      <div class="ai-result-head">
+        <span class="ai-route-name">✦ ${esc(d.destination?.label ?? 'Route')}</span>
+        <span class="badge ${riskCls}">${risk.toUpperCase()} RISK</span>
       </div>
-
-      <p class="ai-recommendation">${escapeHtml(data.recommendation ?? '')}</p>
-
-      <div class="ai-detail-row">
-        <i data-lucide="route" style="width:12px;height:12px;color:var(--purple);flex-shrink:0"></i>
-        <span>Route: <strong>${escapeHtml(data.destination?.label ?? '—')}</strong></span>
-      </div>
-      <div class="ai-detail-row">
-        <i data-lucide="clock" style="width:12px;height:12px;color:var(--cyan);flex-shrink:0"></i>
-        <span>Time Saved: <strong>${escapeHtml(data.timeSaved ?? '—')}</strong></span>
-      </div>
-      <div class="ai-detail-row">
-        <i data-lucide="map-pin" style="width:12px;height:12px;color:var(--blue);flex-shrink:0"></i>
-        <span>Zones: <strong>${data.path?.length ?? 0}</strong></span>
-      </div>
-
-      ${data.avoidZoneLabels?.length ? `
-        <div class="ai-separator"></div>
-        <p class="ai-avoid-label">⚠ Avoid</p>
-        <div class="ai-avoid-tags">
-          ${data.avoidZoneLabels.map(z => `<span class="ai-avoid-tag">${escapeHtml(z)}</span>`).join('')}
-        </div>
+      <p class="ai-rec">${esc(d.recommendation ?? '')}</p>
+      <div class="ai-row"><i data-lucide="route" style="width:11px;height:11px;color:var(--purple);flex-shrink:0"></i><span>Route: <strong>${esc(d.destination?.label ?? '—')}</strong></span></div>
+      <div class="ai-row"><i data-lucide="clock" style="width:11px;height:11px;color:var(--cyan);flex-shrink:0"></i><span>Time saved: <strong>${esc(d.timeSaved ?? '—')}</strong></span></div>
+      <div class="ai-row"><i data-lucide="map-pin" style="width:11px;height:11px;color:var(--blue);flex-shrink:0"></i><span>Path: <strong>${d.path?.length ?? 0} zones</strong></span></div>
+      ${d.routeReason ? `<div class="ai-row"><i data-lucide="info" style="width:11px;height:11px;color:var(--muted);flex-shrink:0"></i><span>${esc(d.routeReason)}</span></div>` : ''}
+      ${d.avoidZoneLabels?.length ? `
+        <div class="ai-sep"></div>
+        <p class="ai-avoid-h">⚠ Avoid Zones</p>
+        <div class="ai-avoid-tags">${d.avoidZoneLabels.map(z => `<span class="ai-avoid-tag">${esc(z)}</span>`).join('')}</div>
       ` : ''}
     </div>
   `;
 
-  aiOutput.animate(
-    [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'translateY(0)' }],
-    { duration: 380, fill: 'forwards', easing: 'ease-out' }
+  aiOut.animate(
+    [{opacity:0,transform:'translateY(8px)'},{opacity:1,transform:'translateY(0)'}],
+    {duration:350,fill:'forwards',easing:'ease-out'}
   );
-
   lucide.createIcons();
 }
 
-function showPlaceholder() {
-  aiPlaceholder.classList.remove('hidden');
-  aiOutput.classList.add('hidden');
-  aiOutput.innerHTML = '';
-  confidenceBadge.classList.add('hidden');
+function showIdle()  { aiIdle.classList.remove('hidden'); aiOut.classList.add('hidden'); aiOut.innerHTML=''; confBdg.classList.add('hidden'); }
+function showError(m){ aiIdle.classList.add('hidden'); aiOut.classList.remove('hidden'); aiOut.innerHTML=`<div class="error-msg">⚠ ${esc(m)}</div>`; }
+
+function loading(on) {
+  state.isLoading = on;
+  if (on) { aiLoad.classList.remove('hidden'); aiLoad.style.display='flex'; aiIdle.classList.add('hidden'); aiOut.classList.add('hidden'); sugBtn.disabled=true; if (refBtn) refBtn.disabled=true; }
+  else    { aiLoad.classList.add('hidden'); aiLoad.style.display=''; sugBtn.disabled=false; if (refBtn) refBtn.disabled=false; }
 }
 
-function showError(message) {
-  aiPlaceholder.classList.add('hidden');
-  aiOutput.classList.remove('hidden');
-  aiOutput.innerHTML = `<div class="error-state">⚠ ${escapeHtml(message)}</div>`;
-}
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
 
-// ── Loading State ─────────────────────────────────────────────
-function setLoadingState(loading) {
-  state.isLoading = loading;
-  if (loading) {
-    aiLoading.classList.remove('hidden');
-    aiLoading.style.display = 'flex';
-    aiPlaceholder.classList.add('hidden');
-    aiOutput.classList.add('hidden');
-    suggestBtn.disabled = true;
-    if (refreshBtn) refreshBtn.disabled = true;
-  } else {
-    aiLoading.classList.add('hidden');
-    aiLoading.style.display = '';
-    suggestBtn.disabled = false;
-    if (refreshBtn) refreshBtn.disabled = false;
-  }
-}
-
-// ── Security ──────────────────────────────────────────────────
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-// ── Start ─────────────────────────────────────────────────────
 init();

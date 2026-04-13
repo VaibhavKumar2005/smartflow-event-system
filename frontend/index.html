@@ -6,328 +6,200 @@
   <meta name="description" content="SmartFlow — AI-powered real-time stadium crowd routing and intelligence dashboard." />
   <title>SmartFlow — Crowd Intelligence</title>
 
-  <!-- Google Fonts: Inter (shadcn/ui default) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
-  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 
-  <!-- Design System & Styles -->
   <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
-  <!-- Ambient background -->
-  <div class="ambient-layer" aria-hidden="true">
-    <div class="ambient-orb orb-blue"></div>
-    <div class="ambient-orb orb-purple"></div>
-    <div class="ambient-orb orb-cyan"></div>
+
+  <!-- Ambient glow -->
+  <div class="ambient" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
   </div>
 
-  <div class="app-shell">
+  <div class="shell">
 
-    <!-- ════════════════ NAVBAR ════════════════ -->
-    <nav class="navbar">
-      <div class="navbar-brand">
-        <div class="brand-icon">
-          <i data-lucide="radio-tower" style="width:18px;height:18px;color:#fff"></i>
-        </div>
-        <div class="brand-text">
-          <span class="brand-name">SmartFlow</span>
-          <span class="brand-sub">Stadium Intelligence</span>
+    <!-- ═══════════ NAVBAR ═══════════ -->
+    <nav class="nav">
+      <div class="nav-brand">
+        <div class="nav-logo"><i data-lucide="radio-tower" style="width:16px;height:16px;color:#fff"></i></div>
+        <div>
+          <div class="nav-title">SmartFlow</div>
+          <div class="nav-sub">Stadium Intelligence</div>
         </div>
       </div>
-
-      <!-- Inline KPI chips — desktop only -->
-      <div class="navbar-chips" id="navbar-chips">
-        <div class="nav-chip">
-          <i data-lucide="users" style="width:12px;height:12px"></i>
-          <span>Crowd:</span>
-          <strong id="chip-density">—</strong>
-        </div>
-        <div class="nav-chip">
-          <i data-lucide="clock" style="width:12px;height:12px"></i>
-          <span>Wait:</span>
-          <strong id="chip-wait">—</strong>
-        </div>
-        <div class="nav-chip">
-          <i data-lucide="shield-check" style="width:12px;height:12px"></i>
-          <span>Safe:</span>
-          <strong id="chip-safe">—</strong>
-        </div>
-      </div>
-
-      <div class="navbar-actions">
-        <button class="btn btn-ghost btn-icon" id="refresh-btn" onclick="loadStadiumState()" title="Refresh">
-          <i data-lucide="refresh-cw" style="width:15px;height:15px"></i>
+      <div class="nav-right">
+        <button class="btn-icon" id="refresh-btn" onclick="loadStadiumState()" title="Refresh data">
+          <i data-lucide="refresh-cw" style="width:14px;height:14px"></i>
         </button>
-        <div class="badge badge-success badge-live">
-          <span class="pulse-dot"></span>
-          Live
-        </div>
+        <div class="live-pill"><span class="pulse-dot"></span>Live</div>
         <span class="nav-clock" id="live-time">—</span>
       </div>
     </nav>
 
-    <!-- ════════════════ KPI BAR ════════════════ -->
-    <section class="kpi-bar" id="kpi-bar">
-
-      <!-- Card 1: Crowd Level -->
-      <div class="card kpi-card" id="kpi-card-density">
-        <div class="card-content kpi-inner">
-          <div class="kpi-left">
-            <p class="kpi-label">Crowd Level</p>
-            <p class="kpi-value" id="kpi-density">—</p>
-            <p class="kpi-meta" id="kpi-density-sub">Loading…</p>
-          </div>
-          <div class="kpi-icon-box kpi-icon-cyan">
-            <i data-lucide="users" style="width:16px;height:16px"></i>
-          </div>
+    <!-- ═══════════ KPI STRIP ═══════════ -->
+    <section class="kpi-strip">
+      <div class="kpi">
+        <div class="kpi-head">
+          <div class="kpi-icon kpi-i-cyan"><i data-lucide="users" style="width:14px;height:14px"></i></div>
+          <span class="kpi-label">Crowd Level</span>
         </div>
-        <div class="kpi-progress"><div class="kpi-progress-fill kpi-fill-cyan" id="kpi-density-bar" style="width:0%"></div></div>
+        <div class="kpi-val" id="kpi-density">—</div>
+        <div class="kpi-sub" id="kpi-density-sub">Loading…</div>
+        <div class="kpi-bar"><div class="kpi-fill fill-cyan" id="kpi-density-bar"></div></div>
       </div>
 
-      <!-- Card 2: Avg Wait Time -->
-      <div class="card kpi-card" id="kpi-card-wait">
-        <div class="card-content kpi-inner">
-          <div class="kpi-left">
-            <p class="kpi-label">Avg Wait Time</p>
-            <p class="kpi-value" id="kpi-wait">—</p>
-            <p class="kpi-meta">Estimated</p>
-          </div>
-          <div class="kpi-icon-box kpi-icon-purple">
-            <i data-lucide="clock" style="width:16px;height:16px"></i>
-          </div>
+      <div class="kpi">
+        <div class="kpi-head">
+          <div class="kpi-icon kpi-i-purple"><i data-lucide="clock" style="width:14px;height:14px"></i></div>
+          <span class="kpi-label">Avg Wait</span>
         </div>
-        <div class="kpi-progress"><div class="kpi-progress-fill kpi-fill-purple" id="kpi-wait-bar" style="width:0%"></div></div>
+        <div class="kpi-val" id="kpi-wait">—</div>
+        <div class="kpi-sub">Estimated</div>
+        <div class="kpi-bar"><div class="kpi-fill fill-purple" id="kpi-wait-bar"></div></div>
       </div>
 
-      <!-- Card 3: Safe Zones -->
-      <div class="card kpi-card" id="kpi-card-safe">
-        <div class="card-content kpi-inner">
-          <div class="kpi-left">
-            <p class="kpi-label">Safe Zones</p>
-            <p class="kpi-value" id="kpi-safe">—</p>
-            <p class="kpi-meta" id="kpi-safe-sub">of 25 total</p>
-          </div>
-          <div class="kpi-icon-box kpi-icon-green">
-            <i data-lucide="shield-check" style="width:16px;height:16px"></i>
-          </div>
+      <div class="kpi">
+        <div class="kpi-head">
+          <div class="kpi-icon kpi-i-green"><i data-lucide="shield-check" style="width:14px;height:14px"></i></div>
+          <span class="kpi-label">Safe Zones</span>
         </div>
-        <div class="kpi-progress"><div class="kpi-progress-fill kpi-fill-green" id="kpi-safe-bar" style="width:0%"></div></div>
+        <div class="kpi-val" id="kpi-safe">—</div>
+        <div class="kpi-sub" id="kpi-safe-sub">of 25</div>
+        <div class="kpi-bar"><div class="kpi-fill fill-green" id="kpi-safe-bar"></div></div>
       </div>
 
-      <!-- Card 4: Efficiency -->
-      <div class="card kpi-card" id="kpi-card-efficiency">
-        <div class="card-content kpi-inner">
-          <div class="kpi-left">
-            <p class="kpi-label">Efficiency</p>
-            <p class="kpi-value" id="kpi-efficiency">—</p>
-            <p class="kpi-meta">Route score</p>
-          </div>
-          <div class="kpi-icon-box kpi-icon-blue">
-            <i data-lucide="zap" style="width:16px;height:16px"></i>
-          </div>
+      <div class="kpi">
+        <div class="kpi-head">
+          <div class="kpi-icon kpi-i-blue"><i data-lucide="zap" style="width:14px;height:14px"></i></div>
+          <span class="kpi-label">Efficiency</span>
         </div>
-        <div class="kpi-progress"><div class="kpi-progress-fill kpi-fill-blue" id="kpi-efficiency-bar" style="width:0%"></div></div>
+        <div class="kpi-val" id="kpi-efficiency">—</div>
+        <div class="kpi-sub">Route score</div>
+        <div class="kpi-bar"><div class="kpi-fill fill-blue" id="kpi-efficiency-bar"></div></div>
       </div>
-
     </section>
 
-    <!-- ════════════════ MAIN CONTENT ════════════════ -->
-    <main class="main-grid">
+    <!-- ═══════════ MAIN ═══════════ -->
+    <main class="main">
 
-      <!-- ── LEFT: Heatmap + Chart ── -->
-      <div class="main-left">
+      <!-- LEFT: Heatmap + Chart -->
+      <div class="col-map">
 
-        <!-- Heatmap Card -->
-        <div class="card heatmap-card">
-          <div class="card-header">
-            <div class="card-title-group">
-              <div class="section-icon icon-blue">
-                <i data-lucide="map" style="width:14px;height:14px"></i>
-              </div>
+        <div class="card map-card">
+          <div class="card-head">
+            <div class="card-tg">
+              <div class="si si-blue"><i data-lucide="map" style="width:13px;height:13px"></i></div>
               <div>
-                <h2 class="card-title">Live Stadium Heatmap</h2>
-                <p class="card-desc">Real-time crowd density · 5×5 Zone Grid</p>
+                <h2 class="card-t">Live Stadium Heatmap</h2>
+                <p class="card-d">Real-time crowd density · 25 zones</p>
               </div>
             </div>
-            <div class="legend-row">
-              <span class="legend-chip"><span class="legend-dot dot-green"></span>Low</span>
-              <span class="legend-chip"><span class="legend-dot dot-amber"></span>Moderate</span>
-              <span class="legend-chip"><span class="legend-dot dot-red"></span>High</span>
+            <div class="legend">
+              <span class="leg"><span class="leg-dot bg-green"></span>Low</span>
+              <span class="leg"><span class="leg-dot bg-amber"></span>Moderate</span>
+              <span class="leg"><span class="leg-dot bg-red"></span>High</span>
             </div>
           </div>
-          <div class="card-content heatmap-wrap">
-            <div id="map" class="heatmap-grid"></div>
+
+          <div class="map-area">
+            <div id="map" class="heatmap"></div>
           </div>
-          <!-- Path Status -->
-          <div id="path-status" class="path-status hidden">
-            <i data-lucide="route" style="width:13px;height:13px;color:var(--purple)"></i>
-            <span id="path-status-text" class="path-status-text">Path active</span>
-            <button class="btn btn-ghost btn-xs ml-auto" onclick="clearRoute()">Clear ✕</button>
+
+          <div id="path-bar" class="path-bar hidden">
+            <i data-lucide="route" style="width:12px;height:12px;color:var(--purple)"></i>
+            <span id="path-bar-text" class="path-bar-text">—</span>
+            <button class="btn-xs" onclick="clearRoute()">Clear ✕</button>
           </div>
         </div>
 
-        <!-- Crowd Trend Chart Card -->
-        <div class="card trend-card">
-          <div class="card-header">
-            <div class="card-title-group">
-              <div class="section-icon icon-cyan">
-                <i data-lucide="trending-up" style="width:14px;height:14px"></i>
-              </div>
-              <h2 class="card-title">Crowd Trend</h2>
+        <div class="card chart-card">
+          <div class="card-head">
+            <div class="card-tg">
+              <div class="si si-cyan"><i data-lucide="trending-up" style="width:13px;height:13px"></i></div>
+              <h2 class="card-t">Crowd Trend</h2>
             </div>
-            <span class="text-muted text-xs">Last 8 intervals</span>
+            <span class="muted xs">Last 8 intervals</span>
           </div>
-          <div class="card-content" style="height:110px;padding-top:0">
-            <canvas id="crowd-chart"></canvas>
-          </div>
+          <div class="chart-wrap"><canvas id="crowd-chart"></canvas></div>
         </div>
-
       </div>
 
-      <!-- ── RIGHT: Sidebar ── -->
-      <aside class="sidebar">
+      <!-- RIGHT: Sidebar -->
+      <aside class="col-side">
 
         <!-- Route Planner -->
-        <div class="card sidebar-card">
-          <div class="card-header">
-            <div class="card-title-group">
-              <div class="section-icon icon-purple">
-                <i data-lucide="compass" style="width:14px;height:14px"></i>
-              </div>
-              <h2 class="card-title">Route Planner</h2>
+        <div class="card">
+          <div class="card-head">
+            <div class="card-tg">
+              <div class="si si-purple"><i data-lucide="compass" style="width:13px;height:13px"></i></div>
+              <h2 class="card-t">Route Planner</h2>
             </div>
           </div>
-          <div class="card-content">
+          <div class="card-body">
             <label class="form-label">Destination</label>
-            <div class="select-wrapper">
-              <i data-lucide="map-pin" class="select-icon" style="width:13px;height:13px"></i>
-              <select id="destination" class="select">
-                <option disabled>Loading destinations…</option>
+            <div class="sel-wrap">
+              <i data-lucide="map-pin" class="sel-icon" style="width:12px;height:12px"></i>
+              <select id="destination" class="sel">
+                <option disabled>Loading…</option>
               </select>
-              <i data-lucide="chevron-down" class="select-chevron" style="width:13px;height:13px"></i>
+              <i data-lucide="chevron-down" class="sel-chev" style="width:12px;height:12px"></i>
             </div>
-            <button id="suggest-btn" onclick="suggestRoute()" class="btn btn-primary btn-full mt-3">
+            <button id="suggest-btn" onclick="suggestRoute()" class="btn-primary">
               <i data-lucide="route" style="width:14px;height:14px"></i>
               Suggest AI Route
-              <div class="btn-shimmer"></div>
+              <div class="btn-shim"></div>
             </button>
           </div>
         </div>
 
         <!-- AI Recommendation -->
-        <div class="card sidebar-card">
-          <div class="card-header">
-            <div class="card-title-group">
-              <div class="section-icon icon-purple">
-                <i data-lucide="sparkles" style="width:14px;height:14px" class="icon-float"></i>
-              </div>
-              <h2 class="card-title">AI Recommendation</h2>
+        <div class="card ai-card">
+          <div class="card-head">
+            <div class="card-tg">
+              <div class="si si-purple"><i data-lucide="sparkles" style="width:13px;height:13px" class="float-anim"></i></div>
+              <h2 class="card-t">AI Recommendation</h2>
             </div>
-            <div id="confidence-badge" class="hidden"></div>
+            <div id="conf-badge" class="badge hidden"></div>
           </div>
-          <div class="card-content" style="padding-top:0">
+          <div class="card-body" style="padding-top:0">
             <div class="ai-panel">
-              <div class="ai-accent-bar"></div>
+              <div class="ai-bar"></div>
 
-              <!-- Loading state -->
               <div id="ai-loading" class="ai-state hidden">
                 <div class="spinner"></div>
-                <span class="text-muted text-sm">Analyzing crowd patterns…</span>
+                <span class="muted sm">Analyzing crowd patterns…</span>
               </div>
 
-              <!-- Placeholder -->
-              <div id="ai-placeholder" class="ai-state ai-placeholder-state">
-                <i data-lucide="cpu" style="width:28px;height:28px;color:var(--muted-fg)" class="mb-2"></i>
-                <p class="text-muted text-xs text-center leading-relaxed">
-                  Select a destination and click<br>
-                  <strong style="color:var(--purple)">Suggest AI Route</strong> to begin
-                </p>
+              <div id="ai-placeholder" class="ai-state ai-idle">
+                <i data-lucide="cpu" style="width:24px;height:24px;color:var(--muted)" class="mb-1"></i>
+                <p class="muted xs center lh">Select a destination and click<br><strong style="color:var(--purple)">Suggest AI Route</strong></p>
               </div>
 
-              <!-- Result -->
               <div id="ai-output" class="hidden"></div>
             </div>
           </div>
         </div>
 
-        <!-- Live Alerts -->
-        <div class="card sidebar-card">
-          <div class="card-header">
-            <div class="card-title-group">
-              <div class="section-icon icon-red">
-                <i data-lucide="bell-ring" style="width:14px;height:14px"></i>
-              </div>
-              <h2 class="card-title">⚠️ Alerts</h2>
+        <!-- Alerts -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-tg">
+              <div class="si si-red"><i data-lucide="bell-ring" style="width:13px;height:13px"></i></div>
+              <h2 class="card-t">Live Alerts</h2>
             </div>
-            <span id="alert-count-badge" class="badge badge-destructive hidden">0</span>
+            <span id="alert-badge" class="badge badge-red hidden">0</span>
           </div>
-          <div class="card-content" style="padding-top:0">
-            <div id="alerts-list" class="alerts-list custom-scrollbar">
-              <div class="alert-item alert-info">
-                <i data-lucide="info" style="width:13px;height:13px;flex-shrink:0"></i>
-                <span>Waiting for data…</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Zone Metrics -->
-        <div class="card sidebar-card">
-          <div class="card-header">
-            <div class="card-title-group">
-              <div class="section-icon icon-blue">
-                <i data-lucide="bar-chart-2" style="width:14px;height:14px"></i>
-              </div>
-              <h2 class="card-title">Zone Metrics</h2>
-            </div>
-          </div>
-          <div class="card-content" style="padding-top:0">
-            <div class="metrics-list">
-              <div class="metric-row">
-                <span class="metric-label"><span class="metric-dot dot-red"></span>High density</span>
-                <span class="metric-val" id="metric-high">—</span>
-              </div>
-              <div class="metric-row">
-                <span class="metric-label"><span class="metric-dot dot-amber"></span>Moderate</span>
-                <span class="metric-val" id="metric-med">—</span>
-              </div>
-              <div class="metric-row">
-                <span class="metric-label"><span class="metric-dot dot-green"></span>Safe zones</span>
-                <span class="metric-val" id="metric-low">—</span>
-              </div>
-              <div class="separator"></div>
-              <div class="metric-row">
-                <span class="text-muted text-xs">Total zones</span>
-                <span class="metric-val" style="color:var(--foreground)">25</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- System Status -->
-        <div class="card sidebar-card">
-          <div class="card-header">
-            <div class="card-title-group">
-              <div class="section-icon icon-green">
-                <i data-lucide="activity" style="width:14px;height:14px"></i>
-              </div>
-              <h2 class="card-title">System Status</h2>
-            </div>
-          </div>
-          <div class="card-content" style="padding-top:0">
-            <div class="status-list">
-              <div class="status-row"><span class="text-muted text-xs">AI Engine</span><span class="badge badge-success badge-sm">● Online</span></div>
-              <div class="status-row"><span class="text-muted text-xs">Pathfinder</span><span class="badge badge-success badge-sm">● Online</span></div>
-              <div class="status-row"><span class="text-muted text-xs">Data Feed</span><span class="badge badge-success badge-sm">● Live</span></div>
-              <div class="status-row"><span class="text-muted text-xs">Gemini API</span><span class="badge badge-success badge-sm" id="gemini-status">● Connected</span></div>
+          <div class="card-body" style="padding-top:0">
+            <div id="alerts-list" class="alerts-scroll">
+              <div class="alert-row alert-info"><i data-lucide="info" style="width:12px;height:12px"></i><span>Waiting for data…</span></div>
             </div>
           </div>
         </div>
@@ -335,12 +207,8 @@
       </aside>
     </main>
 
-    <!-- Footer -->
-    <footer class="app-footer">
-      SmartFlow Crowd Intelligence &middot; Powered by Gemini AI &middot; Real-time Operations
-    </footer>
-
-  </div><!-- end app-shell -->
+    <footer class="foot">SmartFlow Crowd Intelligence · Powered by Gemini AI · Real-time Operations</footer>
+  </div>
 
   <script src="app.js"></script>
 </body>

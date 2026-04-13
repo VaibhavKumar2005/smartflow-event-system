@@ -100,9 +100,10 @@ router.post('/suggest-route', async (req, res, next) => {
       aiResult = {
         recommendation: `Optimal path to ${destination.label} computed via ${path.length} zones, bypassing ${allHighZones.length} high-density areas.`,
         avoidZoneLabels: allHighZones,
-        timeSaved:   '~3 minutes',
+        timeSaved:   '~3 min',
         routeReason: 'Low-density perimeter route selected by pathfinder.',
         riskLevel:   'low',
+        confidence:  'high',
       };
     }
 

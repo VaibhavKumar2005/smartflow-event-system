@@ -2,38 +2,53 @@
  * backend/data/stadium.js
  * ─────────────────────────────────────────────────────────────
  * Single source of truth for stadium layout.
- * Swap `zones` for a DB/sensor feed call when real data is available
- * without touching any route or service file.
+ *
+ * Each zone has a human-readable label so the heatmap and AI
+ * explanations reference real locations, not abstract indices.
+ *
+ * Visual layout (row 0 = top):
+ *   [Gate A]     [North Stands] [Main Entry]   [North Stands] [Gate B]
+ *   [West Wing]  [Food Court]   [Food Court]   [Merch Store]  [East Wing]
+ *   [Section W]  [Concourse W]  [Center Court] [Concourse E]  [Section E]
+ *   [West Lower] [Restrooms]    [South Stands] [First Aid]    [East Lower]
+ *   [Exit W]     [Parking W]    [South Exit]   [Parking E]    [Exit E]
  */
 
 export const GRID_SIZE = 5;
 
+/** Human-readable label for each zone cell, indexed 0–24 */
+export const zoneLabels = [
+  'Gate A',       'North Stands', 'Main Entry',   'North Stands', 'Gate B',
+  'West Wing',    'Food Court',   'Food Court',   'Merch Store',  'East Wing',
+  'Section W',    'Concourse W',  'Center Court', 'Concourse E',  'Section E',
+  'West Lower',   'Restrooms',    'South Stands', 'First Aid',    'East Lower',
+  'Exit W',       'Parking W',    'South Exit',   'Parking E',    'Exit E',
+];
+
 /**
- * 5×5 flat array (index = row * GRID_SIZE + col).
- * Values: 'low' | 'medium' | 'high'
- *
- * Visual layout (row 0 = top):
- *   [0]  [1]  [2]  [3]  [4]
- *   [5]  [6]  [7]  [8]  [9]
- *   [10] [11] [12] [13] [14]
- *   [15] [16] [17] [18] [19]
- *   [20] [21] [22] [23] [24]
+ * 5×5 density grid. Designed with realistic congestion:
+ * - Food Court area (6, 7) = high (everyone eats)
+ * - Main Entry (2) = high (bottleneck)
+ * - South Exit (22) = medium (halftime rush)
+ * - Perimeter wings = mostly low (escape routes)
  */
 export const zones = [
-  "low",    "medium", "high",   "low",    "medium",
-  "low",    "high",   "high",   "medium", "low",
-  "low",    "medium", "low",    "high",   "medium",
-  "medium", "low",    "high",   "low",    "low",
-  "high",   "medium", "low",    "medium", "low",
+  'low',    'medium', 'high',   'medium', 'low',
+  'low',    'high',   'high',   'medium', 'low',
+  'low',    'medium', 'low',    'high',   'medium',
+  'medium', 'low',    'medium', 'low',    'low',
+  'high',   'medium', 'low',    'medium', 'low',
 ];
 
 export const destinations = [
-  { key: "food",     label: "Food Stall Zone A", gridIndex: 4  },
-  { key: "exit",     label: "North Exit Gate",    gridIndex: 2  },
-  { key: "washroom", label: "Main Washroom",      gridIndex: 20 },
+  { key: 'food',     label: 'Food Court',      gridIndex: 6  },
+  { key: 'exit',     label: 'Main Entry',      gridIndex: 2  },
+  { key: 'restroom', label: 'Restrooms',       gridIndex: 16 },
+  { key: 'merch',    label: 'Merchandise Store', gridIndex: 8  },
+  { key: 'south',    label: 'South Exit',      gridIndex: 22 },
 ];
 
-/** Default user starting position (center of grid) */
+/** Default user starting position (Center Court) */
 export const DEFAULT_USER_POS = 12;
 
 // ── Helpers ──────────────────────────────────────────────────
