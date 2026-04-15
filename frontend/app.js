@@ -342,7 +342,7 @@ function showResult(d) {
         <span class="ai-route-name">✦ ${esc(d.destination?.label ?? 'Route')}</span>
         <span class="badge ${riskCls}">${risk.toUpperCase()} RISK</span>
       </div>
-      <p class="ai-rec">${esc(d.recommendation ?? '')}</p>
+      <p class="ai-rec" id="ai-rec-text"></p>
       <div class="ai-row"><i data-lucide="route" style="width:11px;height:11px;color:var(--purple);flex-shrink:0"></i><span>Route: <strong>${esc(d.destination?.label ?? '—')}</strong></span></div>
       <div class="ai-row"><i data-lucide="clock" style="width:11px;height:11px;color:var(--cyan);flex-shrink:0"></i><span>Time saved: <strong>${esc(d.timeSaved ?? '—')}</strong></span></div>
       <div class="ai-row"><i data-lucide="map-pin" style="width:11px;height:11px;color:var(--blue);flex-shrink:0"></i><span>Path: <strong>${d.path?.length ?? 0} zones</strong></span></div>
@@ -360,6 +360,23 @@ function showResult(d) {
     {duration:350,fill:'forwards',easing:'ease-out'}
   );
   lucide.createIcons();
+
+  // Typewriter effect for AI recommendation
+  const recEl = document.getElementById('ai-rec-text');
+  if (recEl) {
+    const text = d.recommendation || '';
+    recEl.textContent = '';
+    let i = 0;
+    function type() {
+      if (i < text.length) {
+        recEl.textContent += text.charAt(i);
+        i++;
+        // Randomize typing speed slightly for a more 'intelligent' real-time feel
+        setTimeout(type, Math.random() * 15 + 10);
+      }
+    }
+    type();
+  }
 }
 
 function showIdle()  { aiIdle.classList.remove('hidden'); aiOut.classList.add('hidden'); aiOut.innerHTML=''; confBdg.classList.add('hidden'); }

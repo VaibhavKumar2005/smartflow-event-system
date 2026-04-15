@@ -24,7 +24,7 @@ const ROUTE_SCHEMA = {
   properties: {
     recommendation: {
       type: 'string',
-      description: '1–2 sentence route recommendation. Confident system-output tone. Reference specific location NAMES (e.g. "Food Court", "Gate A"), never raw indices. No "I suggest". No disclaimers.',
+      description: '2-3 concise sentences. Clear recommendation. Mention areas to avoid. Include time estimate. Include confidence level. Do NOT ask questions. Do NOT mention missing data. Do NOT explain like a chatbot. Do NOT add disclaimers.',
     },
     avoidZoneLabels: {
       type: 'array',
@@ -123,22 +123,24 @@ ROUTING CONTEXT:
 
 YOUR JOB — generate a smart, structured route briefing:
 
-1. RECOMMENDATION: Write 1–2 sentences as if you are a live operations system displaying on a dashboard. Reference LOCATION NAMES, not indices. Be direct: "Route via West Wing and Section W bypasses Food Court congestion."
+1. RECOMMENDATION: Output 2-3 concise sentences. Give a clear recommendation. Mention areas to avoid. Include time estimate. Include confidence level. 
+   Example: "Avoid the central zones due to high congestion. Use the outer concourse through low-density areas to reduce delays and save approximately 5 minutes. Confidence: High."
 
-2. AVOID ZONES: List the specific high-density LOCATION NAMES the route avoids (e.g., "Food Court", "Main Entry").
+2. AVOID ZONES: List the specific high-density LOCATION NAMES the route avoids.
 
-3. TIME SAVED: Estimate realistic time savings vs walking through congestion (e.g., "~4 min", "3–5 min").
+3. TIME SAVED: Estimate realistic time savings vs walking through congestion (e.g., "~5 min").
 
-4. ROUTE REASON: One clear sentence — why THIS path. Mention the specific bottleneck it avoids.
+4. ROUTE REASON: One clear sentence — why THIS path.
 
 5. RISK LEVEL: Overall crowd-risk of the path (low/medium/high).
 
 6. CONFIDENCE: Your confidence in this being optimal (high/medium/low).
 
-TONE:
-- Sound like a live operations display, not a chatbot.
-- Never say "I suggest", "I recommend", "please".
-- Be specific. Name real locations. Be concise.
+STRICT RULES:
+- Do NOT ask questions
+- Do NOT mention missing data
+- Do NOT explain like a chatbot
+- Do NOT add disclaimers
 `.trim();
 
   const result = await getModel().generateContent(prompt);
