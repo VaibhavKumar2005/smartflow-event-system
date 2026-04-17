@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import { RefreshCw, Clock, Map } from 'lucide-react'
 
 /** Live clock — updates every second */
 function LiveClock() {
@@ -15,16 +16,32 @@ function LiveClock() {
   )
 }
 
-export default function Navbar({ loadingState, onRefresh }) {
+/** Relative timestamp — "3s ago", "1m ago" */
+function RelativeTime({ timestamp }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  if (!timestamp) return null
+  const diff = Math.floor((now - new Date(timestamp).getTime()) / 1000)
+  const label = diff < 5 ? 'just now' : diff < 60 ? `${diff}s ago` : `${Math.floor(diff / 60)}m ago`
+
+  return <span className="text-[10px] text-slate-500 font-medium">{label}</span>
+}
+
+export default function Navbar({ loadingState, onRefresh, lastUpdated, autoRefresh, onToggleAutoRefresh }) {
   return (
-    <header className="glass-strong flex items-center justify-between px-5 h-12 flex-shrink-0 z-10 border-b border-border">
+    <header className="relative glass-strong flex items-center justify-between px-5 h-12 flex-shrink-0 z-10">
+
+      {/* Gradient bottom border */}
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-brand-500/30 to-transparent" />
 
       {/* Brand */}
       <div className="flex items-center gap-2.5">
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-content shadow-brand flex-shrink-0">
-          <svg className="w-4 h-4 text-white mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-          </svg>
+        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center shadow-brand flex-shrink-0">
+          <Map className="w-4 h-4 text-white" strokeWidth={2.2} />
         </div>
         <div className="leading-none">
           <div className="text-sm font-bold tracking-tight text-white">SmartFlow</div>
@@ -32,15 +49,35 @@ export default function Navbar({ loadingState, onRefresh }) {
         </div>
       </div>
 
-      {/* Right */}
+      {/* Right controls */}
       <div className="flex items-center gap-3">
-        {/* LIVE pill */}
+        {/* LIVE pill with ping animation */}
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-bold tracking-widest uppercase">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse-slow" />
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-400" />
+          </span>
           Live
         </div>
+
+        <RelativeTime timestamp={lastUpdated} />
         <LiveClock />
-        {/* Refresh */}
+
+        {/* Auto-refresh toggle */}
+        <button
+          onClick={onToggleAutoRefresh}
+          title={autoRefresh ? 'Auto-refresh ON (8s)' : 'Auto-refresh OFF'}
+          className={cn(
+            'w-7 h-7 rounded-lg border flex items-center justify-center transition-all',
+            autoRefresh
+              ? 'border-brand-500/30 text-brand-400 bg-brand-500/10 hover:bg-brand-500/20'
+              : 'border-border text-slate-500 hover:text-slate-300 hover:border-border-strong'
+          )}
+        >
+          <Clock className="w-3.5 h-3.5" strokeWidth={2} />
+        </button>
+
+        {/* Manual refresh */}
         <button
           onClick={onRefresh}
           disabled={loadingState}
@@ -50,9 +87,7 @@ export default function Navbar({ loadingState, onRefresh }) {
             loadingState && 'animate-spin opacity-60 cursor-wait',
           )}
         >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <RefreshCw className="w-3.5 h-3.5" strokeWidth={2.2} />
         </button>
       </div>
     </header>

@@ -5,8 +5,9 @@
 @layer base {
   html { font-family: 'Inter', system-ui, sans-serif; }
   body {
-    background-color: hsl(220, 26%, 5%);
-    color: hsl(210, 40%, 95%);
+    /* Pure dark deep look */
+    background-color: #0A0A0A; 
+    color: #F0F0F0;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
@@ -15,23 +16,23 @@
   /* Custom scrollbar */
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: hsl(220, 20%, 22%); border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: hsl(220, 20%, 30%); }
+  ::-webkit-scrollbar-thumb { background: #333333; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #555555; }
 }
 
 @layer utilities {
-  /* Glassmorphism */
+  /* Glassmorphism -> Sleek Google dark surfaces */
   .glass {
-    background: hsla(220, 25%, 14%, 0.7);
-    backdrop-filter: blur(16px) saturate(1.4);
-    -webkit-backdrop-filter: blur(16px) saturate(1.4);
-    border: 1px solid hsl(220, 20%, 18%);
+    background: rgba(21, 22, 24, 0.6);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
   }
   .glass-strong {
-    background: hsla(220, 25%, 11%, 0.85);
-    backdrop-filter: blur(24px) saturate(1.6);
-    -webkit-backdrop-filter: blur(24px) saturate(1.6);
-    border: 1px solid hsl(220, 20%, 18%);
+    background: rgba(15, 15, 17, 0.85);
+    backdrop-filter: blur(32px) saturate(1.4);
+    -webkit-backdrop-filter: blur(32px) saturate(1.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   /* Ambient glow blobs */
@@ -40,7 +41,35 @@
     border-radius: 50%;
     pointer-events: none;
     z-index: 0;
-    filter: blur(80px);
-    opacity: 0.5;
+    filter: blur(100px);
+    opacity: 0.35;
   }
+
+  /* Shimmer loading skeleton */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      #151618 25%,
+      #1F2022 50%,
+      #151618 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+}
+
+/* ── Animation keyframes ────────────────────────────── */
+
+@keyframes drawRoute {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes routePulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }

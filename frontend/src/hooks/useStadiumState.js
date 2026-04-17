@@ -1,139 +1,155 @@
-import { useState, useCallback } from 'react'
-import { fetchStadiumState, suggestRoute } from '@/lib/api'
-
-const FALLBACK_STATE = {
-  zones: [
-    'low','medium','high','medium','low',
-    'low','high','high','medium','low',
-    'low','medium','low','high','medium',
-    'medium','low','medium','low','low',
-    'high','medium','low','medium','low',
-  ],
-  zoneLabels: [
-    'Gate A','North Stands','Main Entry','North Stands','Gate B',
-    'West Wing','Food Court','Food Court','Merch Store','East Wing',
-    'Section W','Concourse W','Center Court','Concourse E','Section E',
-    'West Lower','Restrooms','South Stands','First Aid','East Lower',
-    'Exit W','Parking W','South Exit','Parking E','Exit E',
-  ],
-  destinations: [
-    { key: 'food',     label: 'Food Court',        gridIndex: 6  },
-    { key: 'exit',     label: 'Main Entry',         gridIndex: 2  },
-    { key: 'restroom', label: 'Restrooms',          gridIndex: 16 },
-    { key: 'merch',    label: 'Merchandise Store',  gridIndex: 8  },
-    { key: 'south',    label: 'South Exit',         gridIndex: 22 },
-  ],
-  userPos: 12,
-  gridSize: 5,
-}
-
-function buildAlerts(zones, zoneLabels) {
-  const alerts = []
-  zones.forEach((z, i) => {
-    if (z === 'high') {
-      alerts.push({
-        id: `high-${i}`,
-        severity: 'high',
-        text: `High congestion: ${zoneLabels[i] ?? `Zone ${i}`}`,
-        time: `${Math.floor(Math.random() * 5) + 1}m ago`,
-      })
-    }
-  })
-  const med = zones.filter(z => z === 'medium').length
-  if (med > 4) alerts.push({ id: 'med-spike', severity: 'medium', text: `${med} zones at moderate capacity`, time: 'Just now' })
-  alerts.push({ id: 'ai-ok', severity: 'info', text: 'AI routing engine active', time: 'System' })
-  return alerts
-}
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { fetchStadiumState } from '../lib/api'
 
 export function useStadiumState() {
-  const [state, setState] = useState({
-    ...FALLBACK_STATE,
-    activePath: [],
-    lastRoute: null,
-    alerts: buildAlerts(FALLBACK_STATE.zones, FALLBACK_STATE.zoneLabels),
-    loadingState: false,   // fetching stadium state
-    loadingRoute: false,   // fetching route
-    error: null,
+  const [data, setData] = useState({
+    zones: [],
+    zoneLabels: {},
+    crowdPercentages: [],
+    destinations: [],
+    gridSize: 5,
+    userLocation: 0,
+  })
+  
+  const [loading, setLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [error, setError] = useState(null)
+  
+  const [kpis, setKpis] = useState({
+    densityScore: 0,
+    prevDensityScore: null,
+    avgWait: 0,
+    prevAvgWait: null,
+    safeZones: 25,
+    prevSafeZones: null,
+    totalZones: 25,
+    efficiency: null,
+    densityLabel: 'Low',
   })
 
-  const reload = useCallback(async () => {
-    setState(s => ({ ...s, loadingState: true, error: null }))
+  const [alerts, setAlerts] = useState([])
+  const [trendHistory, setTrendHistory] = useState([])
+  const [lastUpdated, setLastUpdated] = useState(null)
+  const [autoRefresh, setAutoRefresh] = useState(true)
+
+  const _kpiRef = useRef(kpis)
+
+  const fetchState = useCallback(async (isAuto = false) => {
     try {
-      const data = await fetchStadiumState()
-      setState(s => ({
-        ...s,
-        zones:        data.zones        ?? FALLBACK_STATE.zones,
-        zoneLabels:   data.zoneLabels   ?? FALLBACK_STATE.zoneLabels,
-        destinations: data.destinations ?? FALLBACK_STATE.destinations,
-        userPos:      data.userPos      ?? FALLBACK_STATE.userPos,
-        gridSize:     data.gridSize     ?? FALLBACK_STATE.gridSize,
-        activePath:   [],
-        lastRoute:    null,
-        alerts: buildAlerts(data.zones ?? FALLBACK_STATE.zones, data.zoneLabels ?? FALLBACK_STATE.zoneLabels),
-        loadingState: false,
-        error: null,
-      }))
-    } catch (e) {
-      // Graceful: keep fallback data, show banner error
-      setState(s => ({ ...s, loadingState: false, error: e.message }))
+      if (!isAuto && data.zones.length === 0) setLoading(true)
+      setIsRefreshing(true)
+      
+      const res = await fetchStadiumState()
+      const { zones, crowdPercentages, lastUpdated: serverTime, destinations, gridSize, userLocation, zoneLabels } = res
+      
+      setData({
+        zones: zones || [],
+        crowdPercentages: crowdPercentages || [],
+        destinations: destinations || [],
+        gridSize: gridSize || 5,
+        userLocation: userLocation !== undefined ? userLocation : 0,
+        zoneLabels: zoneLabels || {}
+      })
+
+      setLastUpdated(serverTime || new Date().toISOString())
+
+      // Calc KPIs
+      let high = 0, med = 0, low = 0;
+      let totalDensity = 0;
+      const zArray = zones || []
+      const cArray = crowdPercentages || []
+
+      zArray.forEach((z, i) => {
+        const pct = cArray[i] || 0
+        if (z === 'high') { high++; totalDensity += 80 + pct * 0.2 }
+        else if (z === 'medium') { med++; totalDensity += 40 + pct * 0.2 }
+        else { low++; totalDensity += 10 + pct * 0.2 }
+      })
+
+      const totalZones = zArray.length || 25
+      const densityScore = Math.round(totalDensity / totalZones) || 0
+      const avgWait = Math.round((high * 5 + med * 2 + low * 0.5) / totalZones * 10) / 10 || 0
+      const safeZones = low
+
+      setKpis(prev => {
+        _kpiRef.current = {
+          ...prev,
+          prevDensityScore: prev.densityScore,
+          densityScore,
+          prevAvgWait: prev.avgWait,
+          avgWait,
+          prevSafeZones: prev.safeZones,
+          safeZones,
+          totalZones,
+          densityLabel: densityScore > 65 ? 'Severe' : densityScore > 35 ? 'Moderate' : 'Smooth',
+        }
+        return _kpiRef.current
+      })
+
+      // Alerts
+      const newAlerts = []
+      if (high > 3) newAlerts.push({ id: 'high-zones', severity: 'high', text: `Severe congestion in ${high} zones`, time: 'Just now' })
+      if (avgWait > 5) newAlerts.push({ id: 'wait-time', severity: 'medium', text: `Elevated wait times across stadium`, time: 'Just now' })
+      
+      if (newAlerts.length === 0) {
+        newAlerts.push({ id: 'sys-ok', severity: 'info', text: 'All systems online and responsive', time: 'Just now' })
+      } else {
+        newAlerts.push({ id: 'sys-ok', severity: 'info', text: 'Backend live stream connected', time: 'Just now' })
+      }
+      setAlerts(newAlerts)
+
+      // Trend history (max 20 points)
+      setTrendHistory(prev => {
+        const now = new Date()
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        const pt = { label: timeStr, High: high, Medium: med, Low: low }
+        const next = [...prev, pt]
+        if (next.length > 20) next.shift() // Keep only last 20 measurements
+        return next
+      })
+
+      setError(null)
+    } catch (err) {
+      console.error(err)
+      setError(err.message || 'Failed to fetch stadium state')
+    } finally {
+      setIsRefreshing(false)
+      setLoading(false)
     }
-  }, [])
+  }, [data.zones.length])
 
-  const getRoute = useCallback(async (destKey) => {
-    setState(s => ({ ...s, loadingRoute: true, activePath: [], lastRoute: null, error: null }))
-    try {
-      const data = await suggestRoute(state.userPos, destKey)
-      setState(s => ({
-        ...s,
-        activePath:  data.path ?? [],
-        lastRoute:   data,
-        loadingRoute: false,
-        alerts: [
-          { id: `route-${Date.now()}`, severity: 'info', text: `Route to ${data.destination?.label ?? '?'} — ${data.path?.length ?? 0} zones`, time: 'Just now' },
-          ...s.alerts,
-        ].slice(0, 10),
-      }))
-    } catch (e) {
-      setState(s => ({ ...s, loadingRoute: false, error: e.message }))
+  // Initial fetch
+  useEffect(() => {
+    fetchState(false)
+  }, [fetchState])
+
+  // Simulation interval for 8-second refresh loop
+  useEffect(() => {
+    let timer
+    if (autoRefresh) {
+      timer = setInterval(() => {
+        fetchState(true)
+      }, 8000)
     }
-  }, [state.userPos])
+    return () => clearInterval(timer)
+  }, [autoRefresh, fetchState])
 
-  const clearRoute = useCallback(() => {
-    setState(s => ({ ...s, activePath: [], lastRoute: null }))
-  }, [])
-
-  // Derived KPIs
-  const kpis = computeKPIs(state)
-
-  return { ...state, reload, getRoute, clearRoute, kpis }
-}
-
-function computeKPIs(state) {
-  const { zones, lastRoute, userPos } = state
-  const total   = zones.length
-  const lo = zones.filter(z => z === 'low').length
-  const md = zones.filter(z => z === 'medium').length
-  const hi = zones.filter(z => z === 'high').length
-
-  const densityScore = Math.round(((md * 0.5 + hi) / total) * 100)
-  const densityLabel = densityScore > 60 ? 'High' : densityScore > 30 ? 'Medium' : 'Low'
-  const avgWait = Math.round(2 + (densityScore / 100) * 8)
-
-  let efficiency = null
-  if (lastRoute) {
-    const pathLen = lastRoute.path?.length ?? 1
-    const s = state.gridSize
-    const destIdx = lastRoute.destination?.gridIndex ?? 0
-    const dx = Math.abs((userPos % s) - (destIdx % s))
-    const dy = Math.abs(Math.floor(userPos / s) - Math.floor(destIdx / s))
-    const direct = dx + dy + 1
-    efficiency = Math.max(0, Math.round(Math.min(100, (direct / pathLen) * 100)) - 60)
-  }
+  const toggleAutoRefresh = () => setAutoRefresh(a => !a)
+  const clearError = () => setError(null)
 
   return {
-    densityLabel, densityScore,
-    avgWait,
-    safeZones: lo, totalZones: total,
-    efficiency, hi, md, lo,
+    ...data,
+    loading,
+    isRefreshing,
+    error,
+    clearError,
+    kpis,
+    setKpis,
+    alerts,
+    trendHistory,
+    lastUpdated,
+    autoRefresh,
+    toggleAutoRefresh,
+    refreshState: () => fetchState(false),
   }
 }

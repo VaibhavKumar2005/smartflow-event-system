@@ -76,14 +76,16 @@ function getModel() {
 /**
  * Build a labeled map string for the prompt so Gemini references
  * real location names, not "Zone 6".
+ * Includes crowd capacity percentages when available.
  */
-function buildGridDescription(zones) {
+function buildGridDescription(zones, percentages) {
   const rows = [];
   for (let r = 0; r < 5; r++) {
     const cells = [];
     for (let c = 0; c < 5; c++) {
       const i = r * 5 + c;
-      cells.push(`${zoneLabels[i]} (${zones[i]})`);
+      const pct = percentages?.[i] != null ? ` ${percentages[i]}%` : '';
+      cells.push(`${zoneLabels[i]} (${zones[i]}${pct})`);
     }
     rows.push(`  Row ${r}: ${cells.join(' | ')}`);
   }
@@ -101,6 +103,7 @@ export async function getRouteExplanation({
   path,
   zones,
   allHighZones,
+  crowdPercentages,
 }) {
   // Map path indices to location names for the prompt
   const pathNames = path.map(i => zoneLabels[i]);
@@ -111,26 +114,27 @@ export async function getRouteExplanation({
 
   const prompt = `
 You are the SmartFlow AI — a real-time crowd intelligence engine for stadium operations.
+You speak in an operations-center tone: assertive, precise, zero filler.
 
-VENUE LAYOUT (5×5 grid, each cell = a named zone with crowd density):
-${buildGridDescription(zones)}
+VENUE LAYOUT (5×5 grid, each cell = a named zone with crowd density and capacity):
+${buildGridDescription(zones, crowdPercentages)}
 
 ROUTING CONTEXT:
-- User is at: ${zoneLabels[userLocation]} (index ${userLocation})
-- Destination: ${destination.label} (index ${destination.gridIndex})
+- User is at: ${zoneLabels[userLocation]} (zone ${userLocation})
+- Destination: ${destination.label} (zone ${destination.gridIndex})
 - Computed optimal path: ${pathNames.join(' → ')} (${path.length} zones)
 - High-congestion areas to avoid: ${avoidNames.join(', ')}
 
-YOUR JOB — generate a smart, structured route briefing:
+YOUR JOB — generate a structured route briefing:
 
-1. RECOMMENDATION: Output 2-3 concise sentences. Give a clear recommendation. Mention areas to avoid. Include time estimate. Include confidence level. 
-   Example: "Avoid the central zones due to high congestion. Use the outer concourse through low-density areas to reduce delays and save approximately 5 minutes. Confidence: High."
+1. RECOMMENDATION: 2–3 concise sentences. State the route clearly. Mention areas to avoid. Include time saved. State confidence.
+   Example: "Route via West Wing and Gate A bypasses Food Court congestion at 91% capacity. Estimated 4 minutes saved versus direct path. Confidence: High."
 
 2. AVOID ZONES: List the specific high-density LOCATION NAMES the route avoids.
 
-3. TIME SAVED: Estimate realistic time savings vs walking through congestion (e.g., "~5 min").
+3. TIME SAVED: Realistic time savings vs direct path through congestion (e.g., "~5 min").
 
-4. ROUTE REASON: One clear sentence — why THIS path.
+4. ROUTE REASON: One sentence — why THIS path was selected.
 
 5. RISK LEVEL: Overall crowd-risk of the path (low/medium/high).
 
@@ -139,8 +143,9 @@ YOUR JOB — generate a smart, structured route briefing:
 STRICT RULES:
 - Do NOT ask questions
 - Do NOT mention missing data
-- Do NOT explain like a chatbot
-- Do NOT add disclaimers
+- Do NOT explain like a chatbot or use filler
+- Do NOT add disclaimers or hedging language
+- Be direct, confident, and operational
 `.trim();
 
   const result = await getModel().generateContent(prompt);

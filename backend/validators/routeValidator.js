@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { GRID_SIZE, destinations, coordToIndex } from '../data/stadium.js';
 
 const MAX_INDEX       = GRID_SIZE * GRID_SIZE - 1;
+const TOTAL_ZONES     = GRID_SIZE * GRID_SIZE;
 const VALID_DEST_KEYS = destinations.map(d => d.key);
 
 /**
@@ -54,6 +55,25 @@ export const suggestRouteSchema = z.object({
       val => VALID_DEST_KEYS.includes(val),
       val => ({ message: `"${val}" is not a valid destKey. Must be one of: ${VALID_DEST_KEYS.join(', ')}.` })
     ),
+
+  /**
+   * Optional crowd data snapshot from frontend.
+   * When provided, pathfinding uses this instead of static server-side data
+   * to ensure the route matches exactly what the user sees on screen.
+   */
+  crowdData: z
+    .array(z.enum(['low', 'medium', 'high']))
+    .length(TOTAL_ZONES)
+    .optional(),
+
+  /**
+   * Optional crowd percentage data from frontend (0–100 per zone).
+   * Enriches the AI explanation with capacity data.
+   */
+  crowdPercentages: z
+    .array(z.number().int().min(0).max(100))
+    .length(TOTAL_ZONES)
+    .optional(),
 });
 
 /**

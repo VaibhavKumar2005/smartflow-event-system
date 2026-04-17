@@ -4,18 +4,19 @@
  * POST /api/suggest-route
  *
  * Request body:
- *   { "userLocation": 12, "destKey": "food" }
+ *   { "userLocation": 12, "destKey": "food", "crowdData": [...], "crowdPercentages": [...] }
  *
  * Response:
  *   {
  *     "path": [12, 11, 10, 5, 4],
  *     "pathCoords": [{ "x": 2, "y": 2 }, ...],
- *     "destination": { "key": "food", "label": "Food Stall Zone A", "gridIndex": 4 },
+ *     "destination": { "key": "food", "label": "Food Court", "gridIndex": 4 },
  *     "recommendation": "...",
- *     "avoidZoneLabels": ["Zone 6 (high)", "Zone 7 (high)"],
+ *     "avoidZoneLabels": ["Food Court", "Main Entry"],
  *     "timeSaved": "~4 minutes",
  *     "routeReason": "...",
- *     "riskLevel": "low"
+ *     "riskLevel": "low",
+ *     "confidence": "high"
  *   }
  *
  * Error responses always follow: { "error": "ERROR_CODE", "message": "..." }
@@ -43,7 +44,7 @@ router.post('/suggest-route', async (req, res, next) => {
       ));
     }
 
-    const { userLocation: rawLocation, destKey } = parsed.data;
+    const { userLocation: rawLocation, destKey, crowdData, crowdPercentages } = parsed.data;
     // Normalise: accepts both flat index (12) and coordinate ({x:2, y:2})
     const userLocation = normaliseUserLocation(rawLocation);
 
@@ -68,11 +69,14 @@ router.post('/suggest-route', async (req, res, next) => {
         timeSaved: '0 minutes',
         routeReason: 'No movement required.',
         riskLevel: 'low',
+        confidence: 'high',
       });
     }
 
     // ── 3. Pathfinding (deterministic, backend-only) ───────────
-    const path = findBestPath(userLocation, destination.gridIndex, zones);
+    // Use frontend's crowd snapshot if provided, otherwise fall back to static data
+    const activeZones = crowdData ?? zones;
+    const path = findBestPath(userLocation, destination.gridIndex, activeZones);
     if (path.length === 0) {
       return next(createError(
         'No viable path found between the given locations.',
@@ -81,7 +85,7 @@ router.post('/suggest-route', async (req, res, next) => {
       ));
     }
 
-    const allHighZones = getAllHighDensityZones(zones);
+    const allHighZones = getAllHighDensityZones(activeZones);
 
     // ── 4. AI explanation (structured, with graceful fallback) ──
     let aiResult;
@@ -90,8 +94,9 @@ router.post('/suggest-route', async (req, res, next) => {
         userLocation,
         destination,
         path,
-        zones,
+        zones: activeZones,
         allHighZones,
+        crowdPercentages: crowdPercentages ?? null,
       });
     } catch (aiErr) {
       // Gemini failure must NOT kill the route response.

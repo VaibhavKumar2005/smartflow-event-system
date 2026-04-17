@@ -1,8 +1,13 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { Navigation, MapPin, Zap } from 'lucide-react'
 
-export default function RoutePlanner({ destinations, loading, lastRoute, onSubmit, onClear }) {
+export default function RoutePlanner({ destinations, zones, loading, lastRoute, onSubmit, onClear }) {
   const [destKey, setDestKey] = useState(destinations[0]?.key ?? '')
+
+  const selectedDest = destinations.find(d => d.key === destKey)
+  const destDensity = selectedDest ? zones?.[selectedDest.gridIndex] : null
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -10,13 +15,16 @@ export default function RoutePlanner({ destinations, loading, lastRoute, onSubmi
   }
 
   return (
-    <div className="glass rounded-2xl shadow-card overflow-hidden flex-shrink-0">
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.15 }}
+      className="glass rounded-2xl shadow-card overflow-hidden flex-shrink-0"
+    >
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
         <div className="w-5 h-5 rounded-md bg-accent-500/10 border border-accent-500/20 flex items-center justify-center text-accent-400">
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-          </svg>
+          <Navigation className="w-3 h-3" strokeWidth={2} />
         </div>
         <span className="text-sm font-semibold text-white">Route Planner</span>
       </div>
@@ -28,10 +36,7 @@ export default function RoutePlanner({ destinations, loading, lastRoute, onSubmi
             Destination
           </label>
           <div className="relative">
-            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
+            <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" strokeWidth={2} />
             <select
               value={destKey}
               onChange={e => setDestKey(e.target.value)}
@@ -48,16 +53,39 @@ export default function RoutePlanner({ destinations, loading, lastRoute, onSubmi
           </div>
         </div>
 
+        {/* Destination density preview */}
+        {destDensity && (
+          <motion.div
+            key={destKey}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-300/60 border border-border"
+          >
+            <span className={cn('w-2 h-2 rounded-full flex-shrink-0',
+              destDensity === 'high' ? 'bg-high' : destDensity === 'medium' ? 'bg-medium' : 'bg-low'
+            )} />
+            <span className="text-[11px] text-slate-400">
+              Currently:{' '}
+              <strong className={cn(
+                destDensity === 'high' ? 'text-high' : destDensity === 'medium' ? 'text-medium' : 'text-low'
+              )}>
+                {destDensity}
+              </strong>{' '}density
+            </span>
+          </motion.div>
+        )}
+
         {/* Submit */}
-        <button
+        <motion.button
           type="submit"
           disabled={loading || !destKey}
+          whileHover={!loading ? { y: -2 } : {}}
+          whileTap={!loading ? { y: 0 } : {}}
           className={cn(
-            'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all duration-200',
+            'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-black transition-all duration-200',
             'bg-gradient-to-r from-brand-500 to-accent-400 shadow-brand',
-            'hover:-translate-y-0.5 hover:shadow-[0_8px_28px_hsla(226,85%,58%,0.45)]',
-            'active:translate-y-0',
-            'disabled:opacity-40 disabled:cursor-not-allowed disabled:translate-y-0 disabled:shadow-none',
+            'hover:shadow-glow-brand',
+            'disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none',
           )}
         >
           {loading ? (
@@ -70,13 +98,11 @@ export default function RoutePlanner({ destinations, loading, lastRoute, onSubmi
             </>
           ) : (
             <>
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+              <Zap className="w-3.5 h-3.5" strokeWidth={2.5} />
               Get AI Route
             </>
           )}
-        </button>
+        </motion.button>
 
         {/* Clear */}
         {lastRoute && !loading && (
@@ -89,6 +115,6 @@ export default function RoutePlanner({ destinations, loading, lastRoute, onSubmi
           </button>
         )}
       </form>
-    </div>
+    </motion.div>
   )
 }

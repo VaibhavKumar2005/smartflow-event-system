@@ -1,17 +1,9 @@
-import { useMemo } from 'react'
+import { motion } from 'framer-motion'
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid, Legend,
+  AreaChart, Area, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, CartesianGrid,
 } from 'recharts'
-
-const LABELS = ['T-7', 'T-6', 'T-5', 'T-4', 'T-3', 'T-2', 'T-1', 'Now']
-
-function jitter(base, range) {
-  return LABELS.map((_, i) => {
-    const noise = Math.round((Math.random() - 0.5) * range * 2)
-    return i === LABELS.length - 1 ? base : Math.max(0, base + noise)
-  })
-}
+import { Activity } from 'lucide-react'
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
@@ -29,41 +21,44 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
-export default function TrendChart({ zones }) {
-  const data = useMemo(() => {
-    const hi = zones.filter(z => z === 'high').length
-    const md = zones.filter(z => z === 'medium').length
-    const lo = zones.filter(z => z === 'low').length
-
-    const hArr = jitter(hi, 2)
-    const mArr = jitter(md, 2)
-    const lArr = jitter(lo, 2)
-
-    return LABELS.map((label, i) => ({
-      label,
-      High:   hArr[i],
-      Medium: mArr[i],
-      Low:    lArr[i],
-    }))
-  }, [zones])  // eslint-disable-line
+export default function TrendChart({ trendHistory }) {
+  const data = trendHistory?.length > 0 ? trendHistory : []
 
   return (
-    <div className="glass rounded-2xl shadow-card overflow-hidden flex-shrink-0 h-[110px]">
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.3 }}
+      className="glass rounded-2xl shadow-card overflow-hidden flex-shrink-0 h-[120px]"
+    >
       <div className="flex items-center gap-2 px-4 pt-2.5 pb-1">
         <div className="w-5 h-5 rounded-md bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400">
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-          </svg>
+          <Activity className="w-3 h-3" strokeWidth={2} />
         </div>
         <span className="text-sm font-semibold text-white">Crowd Trend</span>
+        <span className="text-[9px] text-slate-500 font-medium">{data.length} snapshots</span>
       </div>
 
-      <ResponsiveContainer width="100%" height={72}>
-        <LineChart data={data} margin={{ top: 2, right: 16, left: -20, bottom: 0 }}>
+      <ResponsiveContainer width="100%" height={78}>
+        <AreaChart data={data} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gradHigh" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="hsl(0,70%,54%)" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="hsl(0,70%,54%)" stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="gradMed" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="hsl(38,90%,52%)" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="hsl(38,90%,52%)" stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="gradLow" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="hsl(142,65%,48%)" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="hsl(142,65%,48%)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
           <CartesianGrid strokeDasharray="2 4" stroke="hsl(220,20%,12%)" vertical={false} />
           <XAxis
             dataKey="label"
-            tick={{ fill: 'hsl(220,15%,38%)', fontSize: 9, fontFamily: 'Inter' }}
+            tick={{ fill: 'hsl(220,15%,38%)', fontSize: 8, fontFamily: 'Inter' }}
             axisLine={false} tickLine={false}
           />
           <YAxis
@@ -71,15 +66,11 @@ export default function TrendChart({ zones }) {
             axisLine={false} tickLine={false} tickCount={4}
           />
           <Tooltip content={<CustomTooltip />} />
-          <Legend
-            iconType="circle" iconSize={6}
-            wrapperStyle={{ fontSize: 9, fontFamily: 'Inter', color: 'hsl(220,15%,40%)', paddingTop: 0 }}
-          />
-          <Line type="monotone" dataKey="High"   stroke="hsl(0,70%,54%)"   strokeWidth={1.5} dot={false} />
-          <Line type="monotone" dataKey="Medium" stroke="hsl(38,90%,52%)"  strokeWidth={1.5} dot={false} />
-          <Line type="monotone" dataKey="Low"    stroke="hsl(142,65%,48%)" strokeWidth={1.5} dot={false} />
-        </LineChart>
+          <Area type="monotone" dataKey="High"   stroke="hsl(0,70%,54%)"   strokeWidth={1.5} fill="url(#gradHigh)" dot={false} />
+          <Area type="monotone" dataKey="Medium" stroke="hsl(38,90%,52%)"  strokeWidth={1.5} fill="url(#gradMed)"  dot={false} />
+          <Area type="monotone" dataKey="Low"    stroke="hsl(142,65%,48%)" strokeWidth={1.5} fill="url(#gradLow)"  dot={false} />
+        </AreaChart>
       </ResponsiveContainer>
-    </div>
+    </motion.div>
   )
 }
