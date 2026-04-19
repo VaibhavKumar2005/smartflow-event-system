@@ -7,9 +7,11 @@ export default {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
       colors: {
-        // ── Soft dark (Height/Notion/Linear-style) ────────────────
-        bg:   '#0b1220',   // page background — slightly warmer than before
-        card: '#0f172a',   // card surface
+        // ── Three distinct surface layers (key to making cards pop) ──
+        bg:      '#060d18',   // page bg — very deep navy, almost black
+        surface: '#0d1829',   // panel/card surface — clearly lighter
+        elevated:'#131f35',   // inputs, inner elements — another step up
+
         // Brand
         primary: {
           DEFAULT: '#6366f1',
@@ -25,12 +27,12 @@ export default {
         warning: '#f59e0b',
         danger:  '#ef4444',
         // Text
-        'text-main': '#e5e7eb',
-        'text-sub':  '#9ca3af',
-        muted:       '#6b7280',
+        'text-main': '#e2e8f0',
+        'text-sub':  '#94a3b8',
+        muted:       '#64748b',
       },
       borderColor: {
-        DEFAULT: 'rgba(255,255,255,0.06)',
+        DEFAULT: 'rgba(255,255,255,0.08)',
       },
       animation: {
         'fade-in':  'fadeIn 0.18s ease-out',
@@ -41,8 +43,8 @@ export default {
         slideUp: { from: { opacity: '0', transform: 'translateY(6px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
       },
       boxShadow: {
-        // Subtle — no glow, just a whisper of depth
-        card: '0 1px 2px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05)',
+        card: '0 1px 3px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.07)',
+        glow: '0 0 20px rgba(99,102,241,0.15)',
       },
     },
   },

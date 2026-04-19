@@ -2,14 +2,29 @@ import { useMemo }  from 'react'
 import { MapPin }   from 'lucide-react'
 import { cn }       from '@/lib/utils'
 
-// ── Density → cell style (soft, no harsh gradients) ─────────────
+// ── Much more vibrant cell colors — clearly visible against dark bg ──
 function getCellStyle(density) {
-  if (density === 'high')   return { bg: 'rgba(239,68,68,0.18)',   text: '#fca5a5', dot: '#ef4444' }
-  if (density === 'medium') return { bg: 'rgba(245,158,11,0.15)',  text: '#fcd34d', dot: '#f59e0b' }
-  return                           { bg: 'rgba(34,197,94,0.14)',   text: '#86efac', dot: '#22c55e' }
+  if (density === 'high')   return {
+    bg:     'rgba(239,68,68,0.28)',
+    border: 'rgba(239,68,68,0.35)',
+    text:   '#fca5a5',
+    dot:    '#ef4444',
+  }
+  if (density === 'medium') return {
+    bg:     'rgba(245,158,11,0.22)',
+    border: 'rgba(245,158,11,0.30)',
+    text:   '#fde68a',
+    dot:    '#f59e0b',
+  }
+  return {
+    bg:     'rgba(34,197,94,0.18)',
+    border: 'rgba(34,197,94,0.25)',
+    text:   '#86efac',
+    dot:    '#22c55e',
+  }
 }
 
-// ── SVG route overlay ────────────────────────────────────────────
+// ── SVG route overlay ─────────────────────────────────────────────
 function RouteOverlay({ path, gridSize }) {
   const cellPct = 100 / gridSize
 
@@ -41,20 +56,25 @@ function RouteOverlay({ path, gridSize }) {
           <stop offset="0%"   stopColor="#6366f1" />
           <stop offset="100%" stopColor="#8b5cf6" />
         </linearGradient>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="1.5" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
         <marker id="arr" viewBox="0 0 8 6" refX="7" refY="3"
           markerWidth="4" markerHeight="3.5" orient="auto">
           <path d="M 0 0 L 8 3 L 0 6 Z" fill="#8b5cf6" />
         </marker>
       </defs>
 
-      {/* Shadow blur */}
+      {/* Glow shadow */}
       <polyline
         points={polyStr}
         fill="none"
-        stroke="rgba(99,102,241,0.15)"
-        strokeWidth="4"
+        stroke="rgba(99,102,241,0.3)"
+        strokeWidth="5"
         strokeLinecap="round"
         strokeLinejoin="round"
+        filter="url(#glow)"
       />
 
       {/* Main line */}
@@ -62,7 +82,7 @@ function RouteOverlay({ path, gridSize }) {
         points={polyStr}
         fill="none"
         stroke="url(#rg)"
-        strokeWidth="1.8"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
         markerEnd="url(#arr)"
@@ -73,21 +93,20 @@ function RouteOverlay({ path, gridSize }) {
         }}
       />
 
-      {/* Waypoint dots */}
       {points.map((p, i) => (
         <circle
           key={i}
           cx={p.x} cy={p.y}
-          r={i === 0 || i === points.length - 1 ? 2.2 : 1.2}
-          fill={i === 0 ? '#e5e7eb' : i === points.length - 1 ? '#8b5cf6' : '#6366f1'}
-          opacity={0.85}
+          r={i === 0 || i === points.length - 1 ? 2.5 : 1.5}
+          fill={i === 0 ? '#e2e8f0' : i === points.length - 1 ? '#8b5cf6' : '#6366f1'}
+          opacity={0.9}
         />
       ))}
     </svg>
   )
 }
 
-// ── Zone cell ────────────────────────────────────────────────────
+// ── Zone cell ──────────────────────────────────────────────────────
 function ZoneCell({ density, label, isUser, isOnPath, isDest, crowdPct }) {
   const style = getCellStyle(density)
 
@@ -96,49 +115,54 @@ function ZoneCell({ density, label, isUser, isOnPath, isDest, crowdPct }) {
       className={cn(
         'relative flex flex-col items-center justify-center rounded-xl',
         'transition-colors duration-500 select-none cursor-default overflow-hidden',
-        // Route highlight — thin indigo ring, no glow
-        isOnPath && !isDest && !isUser && 'ring-1 ring-primary/50',
-        isDest   && 'ring-1 ring-accent/60',
-        isUser   && 'ring-1 ring-white/40',
+        isOnPath && !isDest && !isUser && 'ring-1 ring-indigo-400/60',
+        isDest   && 'ring-2 ring-violet-400/70',
+        isUser   && 'ring-2 ring-white/50',
       )}
-      style={{ backgroundColor: style.bg }}
+      style={{
+        backgroundColor: style.bg,
+        border: `1px solid ${style.border}`,
+      }}
       title={`${label} — ${density} (${crowdPct}%)`}
     >
       {/* Density dot */}
       <span
-        className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full opacity-60"
+        className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
         style={{ backgroundColor: style.dot }}
       />
 
       {/* Zone name */}
       <span
-        className="text-[7px] font-medium text-center leading-tight px-1 truncate w-full text-center opacity-70"
-        style={{ color: style.text }}
+        className="text-[7px] font-semibold text-center leading-tight px-1 truncate w-full text-center"
+        style={{ color: style.text, opacity: 0.85 }}
       >
         {label}
       </span>
 
       {/* Crowd % */}
-      <span className="text-[9px] font-semibold tabular-nums mt-0.5" style={{ color: style.text }}>
+      <span
+        className="text-[10px] font-bold tabular-nums mt-0.5"
+        style={{ color: style.text }}
+      >
         {crowdPct}%
       </span>
 
       {/* YOU badge */}
       {isUser && (
-        <span className="absolute -bottom-px left-1/2 -translate-x-1/2 text-[6px] font-bold bg-white text-slate-900 px-1.5 py-px rounded-t-md leading-none whitespace-nowrap">
+        <span className="absolute -bottom-px left-1/2 -translate-x-1/2 text-[6px] font-black bg-white text-slate-900 px-1.5 py-px rounded-t-md leading-none whitespace-nowrap">
           YOU
         </span>
       )}
 
       {/* Destination pin */}
       {isDest && (
-        <MapPin className="absolute top-1 left-1 w-2.5 h-2.5 opacity-70" style={{ color: style.dot }} strokeWidth={2.5} />
+        <MapPin className="absolute top-1 left-1 w-2.5 h-2.5" style={{ color: style.dot }} strokeWidth={2.5} />
       )}
     </div>
   )
 }
 
-// ── Main Heatmap ─────────────────────────────────────────────────
+// ── Main Heatmap ──────────────────────────────────────────────────
 export default function Heatmap({ zones, zoneLabels, userPos, activePath, lastRoute, gridSize, crowdPercentages }) {
   const gs      = gridSize || 5
   const destIdx = lastRoute?.destination?.gridIndex ?? -1
@@ -147,20 +171,20 @@ export default function Heatmap({ zones, zoneLabels, userPos, activePath, lastRo
     : zones.map(z => z === 'high' ? 78 : z === 'medium' ? 48 : 18)
 
   return (
-    <div className="flex flex-col h-full bg-card rounded-2xl border border-white/[0.05] overflow-hidden">
+    <div className="flex flex-col h-full bg-surface rounded-2xl border border-white/[0.08] overflow-hidden">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.05]">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07]">
+        <div className="flex items-center gap-2.5">
           <span className="text-sm font-semibold text-text-main">Stadium Heatmap</span>
-          <span className="text-[10px] text-text-sub font-medium uppercase tracking-wider">Live</span>
+          <span className="text-[10px] text-text-sub font-medium uppercase tracking-wider bg-success/10 text-success px-1.5 py-0.5 rounded-md">Live</span>
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-3 text-[10px] text-text-sub">
+        <div className="flex items-center gap-4 text-[10px] text-text-sub">
           {[['#22c55e', 'Low'], ['#f59e0b', 'Med'], ['#ef4444', 'High']].map(([color, lbl]) => (
-            <div key={lbl} className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color, opacity: 0.7 }} />
+            <div key={lbl} className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
               {lbl}
             </div>
           ))}
@@ -196,13 +220,13 @@ export default function Heatmap({ zones, zoneLabels, userPos, activePath, lastRo
 
       {/* Active route bar */}
       {activePath.length > 0 && lastRoute && (
-        <div className="mx-4 mb-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/8 border border-primary/15 text-[11px] text-text-sub animate-fade-in">
-          <span className="w-1 h-1 rounded-full bg-primary flex-shrink-0" />
+        <div className="mx-4 mb-3 flex items-center gap-2.5 px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[12px] text-text-sub animate-fade-in">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
           <span>
-            Route to <strong className="text-text-main font-medium">{lastRoute.destination?.label}</strong>
+            Route to <strong className="text-text-main font-semibold">{lastRoute.destination?.label}</strong>
             {' · '}{activePath.length} zones
             {lastRoute.timeSaved && (
-              <> · <strong className="text-success font-medium">{lastRoute.timeSaved}</strong> saved</>
+              <> · <strong className="text-success font-semibold">{lastRoute.timeSaved}</strong> saved</>
             )}
           </span>
         </div>

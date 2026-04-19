@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Users, Clock, ShieldCheck, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// ── Smooth count-up ──────────────────────────────────────────────
 function CountUp({ value, duration = 400 }) {
   const [current, setCurrent] = useState(value)
   const prev = useRef(value)
@@ -29,7 +28,6 @@ function CountUp({ value, duration = 400 }) {
   return current
 }
 
-// ── Trend arrow ──────────────────────────────────────────────────
 function Arrow({ curr, prev }) {
   if (prev == null) return null
   const dir = curr > prev ? 'up' : curr < prev ? 'down' : null
@@ -41,7 +39,6 @@ function Arrow({ curr, prev }) {
   )
 }
 
-// ── Card config ──────────────────────────────────────────────────
 const CARDS = [
   {
     key:      'density',
@@ -89,7 +86,6 @@ const CARDS = [
   },
 ]
 
-// ── Component ────────────────────────────────────────────────────
 export default function KpiStrip({ kpis }) {
   return (
     <div className="grid grid-cols-4 gap-3">
@@ -101,27 +97,27 @@ export default function KpiStrip({ kpis }) {
         return (
           <div
             key={card.key}
-            className="bg-card rounded-2xl border border-white/[0.05] px-4 py-3"
+            className="bg-surface rounded-2xl border border-white/[0.08] px-4 py-3.5"
           >
-            <div className="flex items-center gap-1.5 mb-2">
-              <Icon className={cn('w-3 h-3', card.iconColor)} strokeWidth={2} />
-              <span className="text-[10px] font-medium uppercase tracking-wider text-text-sub">
+            <div className="flex items-center gap-2 mb-3">
+              <Icon className={cn('w-3.5 h-3.5', card.iconColor)} strokeWidth={2} />
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-text-sub">
                 {card.label}
               </span>
             </div>
 
             <div className="flex items-baseline gap-0.5">
-              <span className={cn('text-xl font-bold tabular-nums leading-none', card.getColor(kpis))}>
+              <span className={cn('text-2xl font-bold tabular-nums leading-none', card.getColor(kpis))}>
                 {card.key === 'efficiency' && kpis.efficiency != null ? '+' : ''}
                 <CountUp value={val} />
               </span>
-              <span className="text-[11px] text-text-sub ml-0.5">
+              <span className="text-xs text-text-sub ml-0.5">
                 {card.getSuffix(kpis)}
               </span>
               <Arrow curr={val} prev={prev} />
             </div>
 
-            <p className="text-[10px] text-text-sub mt-1">{card.getSub(kpis)}</p>
+            <p className="text-[11px] text-text-sub mt-1.5">{card.getSub(kpis)}</p>
           </div>
         )
       })}

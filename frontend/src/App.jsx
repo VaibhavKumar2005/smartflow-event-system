@@ -78,7 +78,6 @@ export default function App() {
     state.clearError()
   }
 
-  // ── Initial loading screen ──────────────────────────────────────
   if (state.loading && !state.zones?.length) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-bg">
