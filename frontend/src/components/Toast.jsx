@@ -1,61 +1,46 @@
-import { useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 
-const TOAST_STYLES = {
-  error:   { bg: 'bg-red-500/10 border-red-500/30',     text: 'text-red-400',     bar: 'bg-red-400' },
-  success: { bg: 'bg-emerald-500/10 border-emerald-500/30', text: 'text-emerald-400', bar: 'bg-emerald-400' },
-  info:    { bg: 'bg-brand-500/10 border-brand-500/30',  text: 'text-brand-400',   bar: 'bg-brand-400' },
+const STYLES = {
+  error:   { border: 'border-danger/20',  text: 'text-danger',   icon: '✕', bar: 'bg-danger'  },
+  success: { border: 'border-success/20', text: 'text-success',  icon: '✓', bar: 'bg-success' },
+  info:    { border: 'border-primary/20', text: 'text-primary',  icon: 'ℹ', bar: 'bg-primary' },
 }
 
-const ICONS = {
-  error:   '✕',
-  success: '✓',
-  info:    'ℹ',
-}
+export default function Toast({ message, type = 'info', onDismiss, duration = 5000 }) {
+  const [show, setShow] = useState(false)
 
-export default function Toast({ message, type = 'error', onDismiss, duration = 5000 }) {
   useEffect(() => {
-    if (!message) return
-    const id = setTimeout(onDismiss, duration)
+    if (!message) { setShow(false); return }
+    setShow(true)
+    const id = setTimeout(() => { setShow(false); setTimeout(onDismiss, 200) }, duration)
     return () => clearTimeout(id)
   }, [message, duration, onDismiss])
 
-  const style = TOAST_STYLES[type] ?? TOAST_STYLES.info
+  const s = STYLES[type] ?? STYLES.info
+
+  if (!message) return null
 
   return (
     <div className="fixed top-14 inset-x-0 z-50 flex justify-center pointer-events-none">
-      <AnimatePresence>
-        {message && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.25 }}
-            className={cn(
-              'pointer-events-auto relative flex items-center gap-2.5 px-4 py-2.5 rounded-xl border shadow-card text-sm font-medium overflow-hidden',
-              style.bg
-            )}
-          >
-            <span className={cn('text-base font-bold', style.text)}>{ICONS[type]}</span>
-            <span className="text-slate-200">{message}</span>
-            <button
-              onClick={onDismiss}
-              className="ml-2 text-slate-500 hover:text-slate-300 transition-colors text-xs"
-            >
-              ✕
-            </button>
-
-            {/* Auto-dismiss progress bar */}
-            <motion.div
-              initial={{ scaleX: 1 }}
-              animate={{ scaleX: 0 }}
-              transition={{ duration: duration / 1000, ease: 'linear' }}
-              className={cn('absolute bottom-0 left-0 right-0 h-0.5 origin-left', style.bar)}
-            />
-          </motion.div>
+      <div
+        className={cn(
+          'pointer-events-auto relative flex items-center gap-3 px-4 py-2 rounded-xl border bg-card text-[12px] font-medium overflow-hidden',
+          'transition-all duration-200',
+          show ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2',
+          s.border,
         )}
-      </AnimatePresence>
+      >
+        <span className={cn('font-semibold text-sm', s.text)}>{s.icon}</span>
+        <span className="text-text-main text-xs">{message}</span>
+        <button onClick={() => { setShow(false); setTimeout(onDismiss, 200) }} className="ml-1 text-text-sub hover:text-text-main transition-colors text-xs">✕</button>
+        {/* Progress bar */}
+        <div
+          className={cn('absolute bottom-0 left-0 right-0 h-[1.5px] origin-left', s.bar)}
+          style={{ animation: show ? `shrink ${duration}ms linear forwards` : 'none' }}
+        />
+        <style>{`@keyframes shrink { from { transform: scaleX(1) } to { transform: scaleX(0) } }`}</style>
+      </div>
     </div>
   )
 }

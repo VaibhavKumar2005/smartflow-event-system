@@ -1,77 +1,58 @@
-import { useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { cn } from '@/lib/utils'
 import { AlertTriangle } from 'lucide-react'
+import { cn }            from '@/lib/utils'
 
 const SEV = {
-  high:   { bar: 'border-high',   dot: 'bg-high' },
-  medium: { bar: 'border-medium', dot: 'bg-medium' },
-  info:   { bar: 'border-brand-500', dot: 'bg-brand-400' },
+  high:   { dot: 'bg-danger',  text: 'text-danger'  },
+  medium: { dot: 'bg-warning', text: 'text-warning' },
+  info:   { dot: 'bg-primary', text: 'text-text-sub' },
 }
 
 export default function AlertsPanel({ alerts = [] }) {
   const highCount = alerts.filter(a => a.severity === 'high').length
 
-  // Sort by severity: high → medium → info
-  const sorted = useMemo(() => {
+  const sorted = [...alerts].sort((a, b) => {
     const order = { high: 0, medium: 1, info: 2 }
-    return [...alerts].sort((a, b) => (order[a.severity] ?? 2) - (order[b.severity] ?? 2))
-  }, [alerts])
+    return (order[a.severity] ?? 2) - (order[b.severity] ?? 2)
+  })
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.25 }}
-      className="glass rounded-2xl shadow-card overflow-hidden flex-shrink-0"
-    >
+    <div className="bg-card rounded-2xl border border-white/[0.05] overflow-hidden flex-shrink-0">
+
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.05]">
         <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded-md bg-high/10 border border-high/20 flex items-center justify-center text-high">
-            <AlertTriangle className="w-3 h-3" strokeWidth={2} />
-          </div>
-          <span className="text-sm font-semibold text-white">Alerts</span>
+          <AlertTriangle className="w-3.5 h-3.5 text-warning opacity-70" strokeWidth={2} />
+          <span className="text-sm font-semibold text-text-main">Alerts</span>
         </div>
         {highCount > 0 && (
-          <span className="text-[9px] font-bold text-white bg-high rounded-full w-4 h-4 flex items-center justify-center">
+          <span className="text-[10px] font-bold text-white bg-danger/80 rounded-full w-4 h-4 flex items-center justify-center leading-none">
             {highCount}
           </span>
         )}
       </div>
 
-      <div className="p-2 space-y-1 max-h-[160px] overflow-y-auto">
+      {/* List */}
+      <div className="divide-y divide-white/[0.04] max-h-[160px] overflow-y-auto">
         {sorted.length === 0 && (
-          <div className="flex items-center gap-2 px-2 py-2 text-[11px] text-slate-500">
-            <span className="w-1.5 h-1.5 rounded-full bg-low" />
-            All clear — no active alerts
+          <div className="flex items-center gap-2 px-4 py-3 text-xs text-text-sub">
+            <span className="w-1.5 h-1.5 rounded-full bg-success opacity-70 flex-shrink-0" />
+            All clear
           </div>
         )}
 
-        <AnimatePresence>
-          {sorted.map((alert, i) => {
-            const s = SEV[alert.severity] ?? SEV.info
-            return (
-              <motion.div
-                key={alert.id ?? i}
-                initial={{ opacity: 0, x: -12 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 12 }}
-                transition={{ duration: 0.2, delay: i * 0.03 }}
-                layout
-                className={cn(
-                  'flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-surface-300/60 border-l-2 text-[11px]',
-                  s.bar,
-                )}
-              >
-                <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', s.dot)} />
-                <span className="flex-1 text-slate-300 truncate">{alert.text}</span>
-                <span className="text-[9px] text-slate-600 flex-shrink-0">{alert.time}</span>
-              </motion.div>
-            )
-          })}
-        </AnimatePresence>
+        {sorted.map((alert, i) => {
+          const sev = SEV[alert.severity] ?? SEV.info
+          return (
+            <div key={alert.id ?? i} className="flex items-start gap-3 px-4 py-2.5">
+              <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1', sev.dot)} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-text-main leading-snug">{alert.text}</p>
+                <p className="text-[10px] text-text-sub mt-0.5">{alert.time}</p>
+              </div>
+            </div>
+          )
+        })}
       </div>
-    </motion.div>
+    </div>
   )
 }

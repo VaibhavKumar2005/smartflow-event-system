@@ -1,0 +1,8 @@
+**/node_modules
+**/.git
+**/.env
+**/dist
+**/.DS_Store
+**/npm-debug.log*
+frontend/.gitignore
+README.md

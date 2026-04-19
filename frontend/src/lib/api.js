@@ -1,4 +1,6 @@
-const BASE = '/api'
+// In production (Cloud Run), set VITE_API_URL to your deployed backend URL.
+// In development, falls back to '/api' so the Vite proxy handles it.
+const BASE = (import.meta.env.VITE_API_URL ?? '') + '/api'
 
 /**
  * Fetch with timeout and retry.

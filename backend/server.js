@@ -16,6 +16,10 @@ import helmet   from 'helmet';
 import rateLimit from 'express-rate-limit';
 import morgan   from 'morgan';
 import dotenv   from 'dotenv';
+import path     from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import stadiumRouter     from './routes/stadium.js';
 import routeRouter       from './routes/route.js';
@@ -66,13 +70,28 @@ app.use(express.json({ limit: '10kb' }));
 app.use('/api', stadiumRouter);
 app.use('/api', routeRouter);
 
-// ── 404 ───────────────────────────────────────────────────────
+// ── Static frontend (production / Cloud Run) ──────────────────
+// When SERVE_STATIC=true, serve the built Vite output from ./public
+// and let all non-API requests fall through to index.html (SPA mode).
+if (process.env.SERVE_STATIC === 'true') {
+  const publicDir = path.join(__dirname, 'public')
+  app.use(express.static(publicDir))
+  app.get('*', (req, res) => {
+    // Only serve index.html for non-API paths
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(path.join(publicDir, 'index.html'))
+    }
+  })
+}
+
+// ── 404 (API routes only) ─────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({
     error:   'NOT_FOUND',
     message: `${req.method} ${req.path} is not a valid endpoint.`,
   });
 });
+
 
 // ── Centralized error handler ─────────────────────────────────
 // Must be the last middleware — Express identifies it by arity (4 args).
