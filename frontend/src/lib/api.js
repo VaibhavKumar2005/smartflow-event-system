@@ -1,7 +1,8 @@
-// Backend URL: production Render deployment takes priority,
-// then VITE_API_URL env var, then local dev proxy.
-const PROD_BACKEND = 'https://smartflow-backend-rfg2.onrender.com'
-const BASE = (import.meta.env.VITE_API_URL || PROD_BACKEND) + '/api'
+// Production backend — Render deployment
+// Using explicit URL to avoid env var misconfiguration.
+const BASE = import.meta.env.DEV
+  ? '/api'
+  : 'https://smartflow-backend-rfg2.onrender.com/api'
 
 /**
  * Fetch with timeout and retry.
