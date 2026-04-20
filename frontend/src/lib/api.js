@@ -1,6 +1,7 @@
-// In production (Cloud Run), set VITE_API_URL to your deployed backend URL.
-// In development, falls back to '/api' so the Vite proxy handles it.
-const BASE = (import.meta.env.VITE_API_URL ?? '') + '/api'
+// Backend URL: production Render deployment takes priority,
+// then VITE_API_URL env var, then local dev proxy.
+const PROD_BACKEND = 'https://smartflow-backend-rfg2.onrender.com'
+const BASE = (import.meta.env.VITE_API_URL || PROD_BACKEND) + '/api'
 
 /**
  * Fetch with timeout and retry.
