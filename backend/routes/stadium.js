@@ -1,14 +1,8 @@
 /**
  * backend/routes/stadium.js
- * ─────────────────────────────────────────────────────────────
  * GET /api/stadium-state
  *
- * Returns all the data the frontend needs to bootstrap:
- * the zone grid, destination registry, default user position,
- * crowd percentages, and grid dimensions.
- *
- * Each call returns a fresh randomized snapshot to simulate
- * real-time crowd sensor data.
+ * Now returns eventPhase and venueCapacity alongside zone data.
  */
 
 import { Router } from 'express';
@@ -23,16 +17,24 @@ import {
 const router = Router();
 
 router.get('/stadium-state', (req, res) => {
-  const { zones, crowdPercentages } = generateRandomizedZones();
+  const { zones, crowdPercentages, phase } = generateRandomizedZones();
+
+  // Venue capacity = average occupancy across all zones
+  const venueCapacity = Math.round(
+    crowdPercentages.reduce((s, p) => s + p, 0) / crowdPercentages.length
+  );
 
   res.json({
     zones,
     zoneLabels,
     crowdPercentages,
     destinations,
-    userPos:  DEFAULT_USER_POS,
-    gridSize: GRID_SIZE,
-    timestamp: new Date().toISOString(),
+    userPos:       DEFAULT_USER_POS,
+    gridSize:      GRID_SIZE,
+    timestamp:     new Date().toISOString(),
+    eventPhase:    phase.key,
+    eventPhaseLabel: phase.label,
+    venueCapacity,
   });
 });
 

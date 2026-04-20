@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Users, Clock, ShieldCheck, Zap } from 'lucide-react'
+import { Users, Clock, ShieldCheck, Activity } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-function CountUp({ value, duration = 400 }) {
+// ── Count-up animation ───────────────────────────────────────────
+function CountUp({ value, duration = 500 }) {
   const [current, setCurrent] = useState(value)
   const prev = useRef(value)
   const raf  = useRef(null)
@@ -28,17 +29,19 @@ function CountUp({ value, duration = 400 }) {
   return current
 }
 
+// ── Trend arrow ──────────────────────────────────────────────────
 function Arrow({ curr, prev }) {
   if (prev == null) return null
   const dir = curr > prev ? 'up' : curr < prev ? 'down' : null
   if (!dir) return null
   return (
-    <span className={cn('text-[10px] ml-0.5', dir === 'up' ? 'text-danger' : 'text-success')}>
+    <span className={cn('text-xs ml-1', dir === 'up' ? 'text-danger' : 'text-success')}>
       {dir === 'up' ? '↑' : '↓'}
     </span>
   )
 }
 
+// ── Card config — 4th card is now Venue Capacity ─────────────────
 const CARDS = [
   {
     key:      'density',
@@ -58,8 +61,8 @@ const CARDS = [
     getValue: k => k.avgWait,
     getSuffix:()  => ' min',
     getPrev:  k => k.prevAvgWait,
-    getSub:   k => k.avgWait > 7 ? 'Elevated' : 'Acceptable',
-    getColor: ()  => 'text-text-main',
+    getSub:   k => k.avgWait > 7 ? 'Elevated' : k.avgWait > 3 ? 'Moderate' : 'Low',
+    getColor: k => k.avgWait > 7 ? 'text-danger' : k.avgWait > 3 ? 'text-warning' : 'text-success',
     iconColor:'text-accent',
   },
   {
@@ -74,21 +77,29 @@ const CARDS = [
     iconColor:'text-success',
   },
   {
-    key:      'efficiency',
-    label:    'Route Efficiency',
-    icon:     Zap,
-    getValue: k => k.efficiency ?? 0,
+    // Venue Capacity — replaces Route Efficiency (which is always empty until a route is run)
+    key:      'capacity',
+    label:    'Venue Capacity',
+    icon:     Activity,
+    getValue: k => k.venueCapacity ?? 0,
     getSuffix:()  => '%',
-    getPrev:  ()  => null,
-    getSub:   k => k.efficiency != null ? 'vs direct path' : 'No route yet',
-    getColor: k => k.efficiency == null ? 'text-text-sub' : k.efficiency >= 20 ? 'text-success' : 'text-warning',
+    getPrev:  k => k.prevVenueCapacity,
+    getSub:   k => {
+      const v = k.venueCapacity ?? 0
+      return v > 80 ? 'Near capacity' : v > 60 ? 'High occupancy' : v > 40 ? 'Moderate' : 'Low occupancy'
+    },
+    getColor: k => {
+      const v = k.venueCapacity ?? 0
+      return v > 80 ? 'text-danger' : v > 60 ? 'text-warning' : 'text-success'
+    },
     iconColor:'text-warning',
   },
 ]
 
+// ── Component ────────────────────────────────────────────────────
 export default function KpiStrip({ kpis }) {
   return (
-    <div className="grid grid-cols-4 gap-3">
+    <div className="grid grid-cols-4 gap-4">
       {CARDS.map(card => {
         const Icon = card.icon
         const val  = card.getValue(kpis)
@@ -97,27 +108,26 @@ export default function KpiStrip({ kpis }) {
         return (
           <div
             key={card.key}
-            className="bg-surface rounded-2xl border border-white/[0.08] px-4 py-3.5"
+            className="bg-card rounded-2xl border border-white/[0.06] shadow-card px-5 py-4"
           >
             <div className="flex items-center gap-2 mb-3">
               <Icon className={cn('w-3.5 h-3.5', card.iconColor)} strokeWidth={2} />
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-text-sub">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted">
                 {card.label}
               </span>
             </div>
 
             <div className="flex items-baseline gap-0.5">
               <span className={cn('text-2xl font-bold tabular-nums leading-none', card.getColor(kpis))}>
-                {card.key === 'efficiency' && kpis.efficiency != null ? '+' : ''}
                 <CountUp value={val} />
               </span>
-              <span className="text-xs text-text-sub ml-0.5">
+              <span className="text-xs text-muted ml-0.5">
                 {card.getSuffix(kpis)}
               </span>
               <Arrow curr={val} prev={prev} />
             </div>
 
-            <p className="text-[11px] text-text-sub mt-1.5">{card.getSub(kpis)}</p>
+            <p className="text-[11px] text-muted mt-1">{card.getSub(kpis)}</p>
           </div>
         )
       })}

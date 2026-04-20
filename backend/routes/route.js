@@ -23,7 +23,7 @@
  */
 
 import { Router } from 'express';
-import { zones, getDestinationByKey, indexToCoord } from '../data/stadium.js';
+import { zones, getDestinationByKey, indexToCoord, getEventPhase } from '../data/stadium.js';
 import { findBestPath, getAllHighDensityZones } from '../services/pathfinder.js';
 import { getRouteExplanation } from '../services/gemini.js';
 import { suggestRouteSchema, normaliseUserLocation } from '../validators/routeValidator.js';
@@ -97,6 +97,7 @@ router.post('/suggest-route', async (req, res, next) => {
         zones: activeZones,
         allHighZones,
         crowdPercentages: crowdPercentages ?? null,
+        eventPhase: getEventPhase().key,
       });
     } catch (aiErr) {
       // Gemini failure must NOT kill the route response.

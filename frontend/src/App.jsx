@@ -9,6 +9,7 @@ import TrendChart    from './components/TrendChart'
 import Toast         from './components/Toast'
 
 import { useStadiumState } from './hooks/useStadiumState'
+import { useGeolocation }  from './hooks/useGeolocation'
 import { suggestRoute }    from './lib/api'
 
 // Fallback labels if backend doesn't supply them
@@ -23,20 +24,30 @@ const FALLBACK_LABELS = [
 export default function App() {
   const state = useStadiumState()
 
+  // ── Live GPS tracking ─────────────────────────────────────────
+  // Uses browser Geolocation API; falls back to simulated walk when
+  // GPS is unavailable (e.g. indoors during a demo).
+  const gps = useGeolocation({ simulateIfUnavailable: true })
+
+  // Derive userLocation: GPS grid cell (when inside stadium) or server default
+  const userLocation = (gps.gridIndex >= 0 && !gps.isOutside)
+    ? gps.gridIndex
+    : state.userLocation
+
   const [activePath,   setActivePath]   = useState([])
   const [lastRoute,    setLastRoute]    = useState(null)
   const [routeLoading, setRouteLoading] = useState(false)
   const [toast,        setToast]        = useState(null)
 
   const handleSuggestRoute = async (destKey) => {
-    if (state.userLocation == null) return
+    if (userLocation == null) return
     setRouteLoading(true)
     setLastRoute(null)
     setActivePath([])
 
     try {
       const data = await suggestRoute(
-        state.userLocation,
+        userLocation,         // ← uses GPS position when available
         destKey,
         state.zones,
         state.crowdPercentages,
@@ -44,6 +55,7 @@ export default function App() {
 
       setActivePath(data.path || [])
 
+      // ✅ Flat field mapping (backend returns top-level fields)
       setLastRoute({
         destination:     data.destination,
         path:            data.path || [],
@@ -73,17 +85,19 @@ export default function App() {
     state.setKpis(k => ({ ...k, efficiency: null }))
   }
 
+  // Pipe state errors into toast (once)
   if (state.error && !toast?.message) {
     setToast({ message: state.error, type: 'error' })
     state.clearError()
   }
 
+  // ── Initial loading screen ────────────────────────────────────
   if (state.loading && !state.zones?.length) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-bg">
+      <div className="flex h-screen w-full items-center justify-center bg-app">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          <p className="text-xs text-text-sub tracking-wide">Connecting to stadium…</p>
+          <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-sm text-muted tracking-wide">Connecting to stadium…</p>
         </div>
       </div>
     )
@@ -94,7 +108,7 @@ export default function App() {
     : FALLBACK_LABELS
 
   return (
-    <div className="flex flex-col h-screen bg-bg text-text-main font-sans overflow-hidden">
+    <div className="flex flex-col h-screen bg-app text-slate-100 font-sans overflow-hidden">
 
       <Toast
         message={toast?.message}
@@ -109,29 +123,33 @@ export default function App() {
         autoRefresh={state.autoRefresh}
         onRefresh={state.refreshState}
         onToggleAutoRefresh={state.toggleAutoRefresh}
+        eventPhase={state.eventPhase}
+        eventPhaseLabel={state.eventPhaseLabel}
+        gps={gps}
       />
 
       {/* ── Main content ───────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-5 py-4 gap-4">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
 
-        {/* Row 1: Heatmap (8 cols) + Sidebar (4 cols) */}
-        <div className="flex-1 grid grid-cols-12 gap-4 min-h-0">
+        {/* Row 1: Heatmap + Sidebar */}
+        <div className="flex-1 grid grid-cols-12 gap-4 p-4 min-h-0">
 
-          {/* Heatmap */}
+          {/* Left — Heatmap (8 cols) */}
           <div className="col-span-8 min-h-0">
             <Heatmap
               zones={state.zones}
               zoneLabels={labels}
-              userPos={state.userLocation}
+              userPos={userLocation}
               activePath={activePath}
               lastRoute={lastRoute}
               gridSize={state.gridSize}
               crowdPercentages={state.crowdPercentages}
+              gps={gps}
             />
           </div>
 
-          {/* Sidebar */}
-          <div className="col-span-4 flex flex-col gap-3 min-h-0 overflow-y-auto pr-0.5">
+          {/* Right — Sidebar (4 cols) */}
+          <div className="col-span-4 flex flex-col gap-4 min-h-0 overflow-y-auto pr-0.5">
             <RoutePlanner
               destinations={state.destinations}
               zones={state.zones}
@@ -149,7 +167,7 @@ export default function App() {
         </div>
 
         {/* Row 2: KPI strip + Trend chart */}
-        <div className="flex-shrink-0 grid grid-cols-12 gap-4">
+        <div className="flex-shrink-0 grid grid-cols-12 gap-4 px-4 pb-4">
           <div className="col-span-8">
             <KpiStrip kpis={state.kpis} />
           </div>

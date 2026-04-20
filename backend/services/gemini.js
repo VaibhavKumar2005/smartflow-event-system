@@ -1,24 +1,11 @@
 /**
  * backend/services/gemini.js
- * ─────────────────────────────────────────────────────────────
- * Gemini integration with STRUCTURED OUTPUT.
- *
- * Key design decisions:
- * 1. Gemini is only responsible for the EXPLANATION layer —
- *    pathfinding is done deterministically in pathfinder.js first.
- * 2. `responseMimeType: "application/json"` + `responseSchema`
- *    guarantees the response is parseable JSON with known fields.
- *    No more fragile text parsing or prompt-engineering hacks.
- * 3. The caller (route.js) owns the fallback — if Gemini fails,
- *    the route still responds with path data and a default message.
+ * Gemini integration with STRUCTURED OUTPUT + event phase context.
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { zoneLabels } from '../data/stadium.js';
 
-/**
- * Structured output schema.
- */
 const ROUTE_SCHEMA = {
   type: 'object',
   properties: {
@@ -47,18 +34,16 @@ const ROUTE_SCHEMA = {
     confidence: {
       type: 'string',
       enum: ['high', 'medium', 'low'],
-      description: 'AI confidence in the recommendation. High = clear optimal path, Low = multiple risky zones unavoidable.',
+      description: 'AI confidence in the recommendation.',
     },
   },
   required: ['recommendation', 'avoidZoneLabels', 'timeSaved', 'routeReason', 'riskLevel', 'confidence'],
 };
 
-// Lazily initialised — we don't throw at module load so the server can
-// start without a key and route.js can fall back gracefully.
 let _model = null;
 function getModel() {
   if (!process.env.GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not set. Add it to your .env file.');
+    throw new Error('GEMINI_API_KEY is not set.');
   }
   if (!_model) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -73,17 +58,12 @@ function getModel() {
   return _model;
 }
 
-/**
- * Build a labeled map string for the prompt so Gemini references
- * real location names, not "Zone 6".
- * Includes crowd capacity percentages when available.
- */
 function buildGridDescription(zones, percentages) {
   const rows = [];
   for (let r = 0; r < 5; r++) {
     const cells = [];
     for (let c = 0; c < 5; c++) {
-      const i = r * 5 + c;
+      const i   = r * 5 + c;
       const pct = percentages?.[i] != null ? ` ${percentages[i]}%` : '';
       cells.push(`${zoneLabels[i]} (${zones[i]}${pct})`);
     }
@@ -92,11 +72,15 @@ function buildGridDescription(zones, percentages) {
   return rows.join('\n');
 }
 
-/**
- * Get a structured AI explanation for a pre-computed route.
- * Gemini does NOT do pathfinding — the path is already computed.
- * Gemini only adds the human-readable explanation layer.
- */
+/** Phase-specific context inserted into the AI prompt for more actionable output */
+const PHASE_CONTEXT = {
+  PRE_GAME:  'The event has not started yet. Gates and entries are the primary bottlenecks as attendees arrive.',
+  IN_GAME_1: 'First half is in progress. Seating areas are at peak capacity. Concourses and food areas are quiet.',
+  HALFTIME:  'HALFTIME IS ACTIVE. This is peak pressure on food courts, restrooms, and concourses. All concession zones are critically congested.',
+  IN_GAME_2: 'Second half is underway. Seating areas have refilled. Early leavers may start heading to exits.',
+  POST_GAME: 'The event has ended. ALL exits, parking areas, and concourses are surging simultaneously. This is the highest-risk routing window.',
+};
+
 export async function getRouteExplanation({
   userLocation,
   destination,
@@ -104,52 +88,47 @@ export async function getRouteExplanation({
   zones,
   allHighZones,
   crowdPercentages,
+  eventPhase,
 }) {
-  // Map path indices to location names for the prompt
-  const pathNames = path.map(i => zoneLabels[i]);
+  const pathNames  = path.map(i => zoneLabels[i]);
   const avoidNames = allHighZones.map(z => {
     const idx = parseInt(z.replace('Zone ', ''));
     return isNaN(idx) ? z : zoneLabels[idx];
   });
 
+  const phaseCtx = PHASE_CONTEXT[eventPhase] ?? 'Event is in progress.';
+
   const prompt = `
 You are the SmartFlow AI — a real-time crowd intelligence engine for stadium operations.
 You speak in an operations-center tone: assertive, precise, zero filler.
 
-VENUE LAYOUT (5×5 grid, each cell = a named zone with crowd density and capacity):
+EVENT PHASE: ${eventPhase?.replace('_', ' ')}
+${phaseCtx}
+
+VENUE LAYOUT (5×5 grid, each cell = named zone with density and capacity %):
 ${buildGridDescription(zones, crowdPercentages)}
 
 ROUTING CONTEXT:
 - User is at: ${zoneLabels[userLocation]} (zone ${userLocation})
 - Destination: ${destination.label} (zone ${destination.gridIndex})
 - Computed optimal path: ${pathNames.join(' → ')} (${path.length} zones)
-- High-congestion areas to avoid: ${avoidNames.join(', ')}
+- High-congestion zones to avoid: ${avoidNames.join(', ') || 'none'}
 
-YOUR JOB — generate a structured route briefing:
+YOUR JOB — generate a structured route briefing that is specific to the current event phase:
 
-1. RECOMMENDATION: 2–3 concise sentences. State the route clearly. Mention areas to avoid. Include time saved. State confidence.
-   Example: "Route via West Wing and Gate A bypasses Food Court congestion at 91% capacity. Estimated 4 minutes saved versus direct path. Confidence: High."
-
-2. AVOID ZONES: List the specific high-density LOCATION NAMES the route avoids.
-
-3. TIME SAVED: Realistic time savings vs direct path through congestion (e.g., "~5 min").
-
-4. ROUTE REASON: One sentence — why THIS path was selected.
-
-5. RISK LEVEL: Overall crowd-risk of the path (low/medium/high).
-
-6. CONFIDENCE: Your confidence in this being optimal (high/medium/low).
+1. RECOMMENDATION: 2–3 sentences. Name the route. Reference the event phase context. Mention congestion areas to avoid.
+2. AVOID ZONES: Specific high-density location names.
+3. TIME SAVED: Realistic savings vs direct path (e.g. "~4 min"). During halftime/post-game, be more conservative (add 1–2 min).
+4. ROUTE REASON: One sentence — why THIS path given CURRENT phase conditions.
+5. RISK LEVEL: low/medium/high — factor in event phase (halftime/post-game = inherently higher risk).
+6. CONFIDENCE: high/medium/low.
 
 STRICT RULES:
-- Do NOT ask questions
-- Do NOT mention missing data
-- Do NOT explain like a chatbot or use filler
-- Do NOT add disclaimers or hedging language
-- Be direct, confident, and operational
+- Do NOT ask questions or hedge
+- Reference the event phase explicitly (halftime, post-game, etc.)
+- Be direct and operational
 `.trim();
 
   const result = await getModel().generateContent(prompt);
-  const text   = result.response.text();
-
-  return JSON.parse(text);
+  return JSON.parse(result.response.text());
 }
